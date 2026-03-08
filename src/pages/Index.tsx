@@ -41,6 +41,14 @@ const formatSessionLabel = (isoString: string) => {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
 
+const respiratoryHealthPercent = (rms: number, healthPercent?: number) => {
+  if (typeof healthPercent === "number") {
+    return Math.max(0, Math.min(100, Math.round(healthPercent)));
+  }
+
+  return Math.max(0, Math.min(100, Math.round(100 - rms * 85)));
+};
+
 const Index = () => {
   const navigate = useNavigate();
   const { user } = useUser();
@@ -106,7 +114,7 @@ const Index = () => {
         .reverse()
         .map((entry) => ({
           name: formatSessionLabel(entry.createdAt),
-          value: Number(entry.rms.toFixed(2)),
+          value: respiratoryHealthPercent(entry.rms, entry.healthPercent),
         }));
     }
 
@@ -119,12 +127,12 @@ const Index = () => {
       }));
   }, [filteredHearingHistory, graphView, motorHistory, respiratoryHistory]);
 
-  const yDomain = graphView === "respiratory" ? undefined : ([0, 100] as const);
+  const yDomain = [0, 100] as const;
   const graphLabel =
     graphView === "hearing"
       ? "Hearing % Heard"
       : graphView === "respiratory"
-        ? "Respiratory RMS"
+        ? "Respiratory Health %"
         : "Motor Tremor %";
 
   return (

@@ -106,8 +106,27 @@ const classifyFallback = (samples, sampleRate) => {
     confidence = Math.max(0.55, Math.min(0.9, 0.9 - Math.max(crackleScore, wheezeScore)));
   }
 
-  const healthPenalty = Math.min(40, Math.max(0, (rms - 250) / 20));
-  const healthPercent = Math.max(20, Math.min(98, 95 - healthPenalty));
+  const labelPenaltyByClass = {
+    normal: 0,
+    crackle: 14,
+    wheeze: 16,
+    both: 26,
+  };
+
+  const rmsPenalty = Math.max(0, Math.min(55, (rms - 180) / 18));
+  const zcrPenalty = Math.max(0, Math.min(20, Math.abs(zeroCrossingRate - 0.08) * 280));
+  const durationPenalty = Math.max(0, Math.min(25, (18 - durationSeconds) * 3));
+  const abnormalConfidencePenalty =
+    label === "normal" ? 0 : Math.max(0, Math.min(12, (confidence - 0.55) * 30));
+
+  const totalPenalty =
+    rmsPenalty +
+    zcrPenalty +
+    durationPenalty +
+    labelPenaltyByClass[label] +
+    abnormalConfidencePenalty;
+
+  const healthPercent = Math.max(5, Math.min(98, 94 - totalPenalty));
 
   return {
     label,
