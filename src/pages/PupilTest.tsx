@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Eye, ScanFace } from "lucide-react";
+import { useAuth } from "@clerk/react";
 import MobileLayout from "@/components/MobileLayout";
 import { Button } from "@/components/ui/button";
+import { saveEyeHistory } from "@/lib/testHistory";
 
 const getDefaultWsUrl = () => {
   if (typeof window === "undefined") return "ws://localhost:8000/ws/gaze";
@@ -89,6 +91,7 @@ type GazeCloudApi = {
 const CALIB_DWELL_MS = 2200;
 
 const PupilTest = () => {
+  const { userId } = useAuth();
   const [phase, setPhase] = useState<Phase>("setup");
   const [calibIndex, setCalibIndex] = useState(0);
   const [target, setTarget] = useState<{ x: number; y: number } | null>(null);
@@ -150,6 +153,7 @@ const PupilTest = () => {
   const gazeCloudLoadedRef = useRef(false);
   const timingEnabledRef = useRef(false);
   const reloadTimeoutRef = useRef<number | null>(null);
+  const savedResultRef = useRef(false);
 
   const getGazeCloud = useCallback(() => {
     const w = window as Window & { GazeCloudAPI?: GazeCloudApi };
@@ -534,6 +538,25 @@ const PupilTest = () => {
   useEffect(() => {
     if (phase !== "result") return;
 
+    if (!savedResultRef.current && trialsRef.current.length > 0) {
+      const avgReactionMs = Math.round(
+        (trialsRef.current.reduce((sum, trial) => sum + trial.reaction_time, 0) / trialsRef.current.length) * 1000,
+      );
+      const avgDistancePx = Math.round(
+        trialsRef.current.reduce((sum, trial) => sum + trial.distance, 0) / trialsRef.current.length,
+      );
+
+      saveEyeHistory(
+        {
+          avgReactionMs,
+          avgDistancePx,
+          trialCount: trialsRef.current.length,
+        },
+        userId,
+      );
+      savedResultRef.current = true;
+    }
+
     setStatus("Test complete. Refreshing page...");
     reloadTimeoutRef.current = window.setTimeout(() => {
       window.location.reload();
@@ -545,7 +568,7 @@ const PupilTest = () => {
         reloadTimeoutRef.current = null;
       }
     };
-  }, [phase]);
+  }, [phase, userId]);
 
   useEffect(() => {
     return () => {
@@ -778,6 +801,7 @@ const PupilTest = () => {
       okCount: 0,
     });
     pointStartRef.current = null;
+    savedResultRef.current = false;
     setStatus("Click Start to begin");
   };
 

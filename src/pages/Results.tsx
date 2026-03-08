@@ -12,9 +12,11 @@ import {
   YAxis,
 } from "recharts";
 import {
+  EyeHistoryEntry,
   HearingHistoryEntry,
   MotorHistoryEntry,
   RespiratoryHistoryEntry,
+  loadEyeHistory,
   loadHearingHistory,
   loadMotorHistory,
   loadRespiratoryHistory,
@@ -23,7 +25,16 @@ import { computeHealthScore } from "@/lib/healthScore";
 
 type ChartRow = {
   label: string;
-  score: number;
+  value: number;
+};
+
+type ChartConfig = {
+  key: string;
+  label: string;
+  color: string;
+  data: ChartRow[];
+  formatValue: (value: number) => string;
+  yDomain?: [number, number] | ["auto", "auto"];
 };
  
 const formatShortDate = (iso: string) =>
@@ -35,19 +46,22 @@ const Results = () => {
   const [hearingHistory, setHearingHistory] = useState<HearingHistoryEntry[]>([]);
   const [respiratoryHistory, setRespiratoryHistory] = useState<RespiratoryHistoryEntry[]>([]);
   const [motorHistory, setMotorHistory] = useState<MotorHistoryEntry[]>([]);
+  const [eyeHistory, setEyeHistory] = useState<EyeHistoryEntry[]>([]);
 
   const refreshHistory = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [hearing, respiratory, motor] = await Promise.all([
+      const [hearing, respiratory, motor, eye] = await Promise.all([
         loadHearingHistory(userId),
         loadRespiratoryHistory(userId),
         loadMotorHistory(userId),
+        loadEyeHistory(userId),
       ]);
 
       setHearingHistory(hearing);
       setRespiratoryHistory(respiratory);
       setMotorHistory(motor);
+      setEyeHistory(eye);
     } finally {
       setIsLoading(false);
     }
@@ -66,18 +80,26 @@ const Results = () => {
     () =>
       [...hearingHistory]
         .reverse()
-        .map((entry) => ({ label: formatShortDate(entry.createdAt), score: entry.tonesHeardPercent })),
+        .map((entry) => ({ label: formatShortDate(entry.createdAt), value: entry.tonesHeardPercent })),
     [hearingHistory],
   );
 
-  const respiratoryData = useMemo<ChartRow[]>(
+  const respiratoryScoreData = useMemo<ChartRow[]>(
     () =>
       [...respiratoryHistory]
         .reverse()
         .map((entry) => {
           const normalized = Math.max(0, Math.min(100, Math.round(100 - entry.rms * 85)));
-          return { label: formatShortDate(entry.createdAt), score: normalized };
+          return { label: formatShortDate(entry.createdAt), value: normalized };
         }),
+    [respiratoryHistory],
+  );
+
+  const exhalationData = useMemo<ChartRow[]>(
+    () =>
+      [...respiratoryHistory]
+        .reverse()
+        .map((entry) => ({ label: formatShortDate(entry.createdAt), value: Number(entry.durationSeconds.toFixed(2)) })),
     [respiratoryHistory],
   );
 
@@ -85,15 +107,63 @@ const Results = () => {
     () =>
       [...motorHistory]
         .reverse()
-        .map((entry) => ({ label: formatShortDate(entry.createdAt), score: entry.stabilityPercent })),
+        .map((entry) => ({ label: formatShortDate(entry.createdAt), value: entry.stabilityPercent })),
     [motorHistory],
   );
 
-  const charts = [
-    { key: "hearing", label: "Hearing", color: "hsl(var(--hearing))", data: hearingData },
-    { key: "respiratory", label: "Respiratory", color: "hsl(var(--respiratory))", data: respiratoryData },
-    { key: "motor", label: "Motor", color: "hsl(var(--motor))", data: motorData },
-  ];
+  const eyeAverageTimeData = useMemo<ChartRow[]>(
+    () =>
+      [...eyeHistory]
+        .reverse()
+        .map((entry) => ({ label: formatShortDate(entry.createdAt), value: Number((entry.avgReactionMs / 1000).toFixed(3)) })),
+    [eyeHistory],
+  );
+
+  const charts = useMemo<ChartConfig[]>(
+    () => [
+      {
+        key: "hearing",
+        label: "Hearing",
+        color: "hsl(var(--hearing))",
+        data: hearingData,
+        formatValue: (value) => `${Math.round(value)}%`,
+        yDomain: [0, 100],
+      },
+      {
+        key: "respiratory",
+        label: "Respiratory",
+        color: "hsl(var(--respiratory))",
+        data: respiratoryScoreData,
+        formatValue: (value) => `${Math.round(value)}%`,
+        yDomain: [0, 100],
+      },
+      {
+        key: "motor",
+        label: "Motor",
+        color: "hsl(var(--motor))",
+        data: motorData,
+        formatValue: (value) => `${Math.round(value)}%`,
+        yDomain: [0, 100],
+      },
+      {
+        key: "eye-average-time",
+        label: "Eye Checker Avg Time",
+        color: "hsl(var(--accent))",
+        data: eyeAverageTimeData,
+        formatValue: (value) => `${value.toFixed(3)}s`,
+        yDomain: ["auto", "auto"],
+      },
+      {
+        key: "exhalation-duration",
+        label: "Exhalation Duration",
+        color: "hsl(var(--primary))",
+        data: exhalationData,
+        formatValue: (value) => `${value.toFixed(2)}s`,
+        yDomain: ["auto", "auto"],
+      },
+    ],
+    [exhalationData, eyeAverageTimeData, hearingData, motorData, respiratoryScoreData],
+  );
 
   return (
     <div className="px-5 pt-14 pb-6">
@@ -130,7 +200,7 @@ const Results = () => {
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-display font-semibold text-sm text-foreground">{chart.label}</h3>
               <span className="text-xs font-medium" style={{ color: chart.color }}>
-                {chart.data.length ? `${chart.data[chart.data.length - 1].score}%` : "No data"}
+                {chart.data.length ? chart.formatValue(chart.data[chart.data.length - 1].value) : "No data"}
               </span>
             </div>
             {chart.data.length ? (
@@ -139,8 +209,9 @@ const Results = () => {
                   <LineChart data={chart.data}>
                     <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
                     <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                    <YAxis domain={[0, 100]} hide />
+                    <YAxis domain={chart.yDomain ?? [0, 100]} hide />
                     <Tooltip
+                      formatter={(value) => chart.formatValue(Number(value))}
                       contentStyle={{
                         backgroundColor: "hsl(var(--card))",
                         border: "1px solid hsl(var(--border))",
@@ -150,7 +221,7 @@ const Results = () => {
                     />
                     <Line
                       type="monotone"
-                      dataKey="score"
+                      dataKey="value"
                       stroke={chart.color}
                       strokeWidth={2.5}
                       dot={false}
