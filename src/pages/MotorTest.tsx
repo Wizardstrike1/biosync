@@ -41,8 +41,6 @@ const getTremorLabel = (tremorIndex: number): "Low" | "Moderate" | "High" => {
   return "High";
 };
 
-// Provide human-readable feedback when tremor index is elevated.
-// The thresholds reflect areas where clinical follow-up might be warranted.
 const getTremorFeedback = (tremorIndex: number): string | null => {
   if (tremorIndex >= 80) {
     return (
