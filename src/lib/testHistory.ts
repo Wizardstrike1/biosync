@@ -18,8 +18,9 @@ export type RespiratoryHistoryEntry = {
   createdAt: string;
   rms: number;
   confidencePercent: number;
+  healthPercent?: number;
   durationSeconds: number;
-  label: "normal" | "crackle" | "wheeze" | "both";
+  label: string;
 };
 
 export type MotorHistoryEntry = {
@@ -31,19 +32,10 @@ export type MotorHistoryEntry = {
   targetHits: number;
 };
 
-export type EyeHistoryEntry = {
-  id: string;
-  createdAt: string;
-  avgReactionMs: number;
-  avgDistancePx: number;
-  trialCount: number;
-};
-
 const STORAGE_KEYS = {
   hearing: "biosync-history-hearing",
   respiratory: "biosync-history-respiratory",
   motor: "biosync-history-motor",
-  eye: "biosync-history-eye",
 } as const;
 
 const MAX_HISTORY = 30;
@@ -62,12 +54,11 @@ const withUserKey = (baseKey: string, userId?: string | null) =>
 
 const withGuestKey = (baseKey: string) => `${baseKey}:guest`;
 
-type ResultType = "hearing" | "respiratory" | "motor" | "eye";
+type ResultType = "hearing" | "respiratory" | "motor";
 
 const getResultTypeKey = (type: ResultType) => {
   if (type === "hearing") return STORAGE_KEYS.hearing;
   if (type === "respiratory") return STORAGE_KEYS.respiratory;
-  if (type === "eye") return STORAGE_KEYS.eye;
   return STORAGE_KEYS.motor;
 };
 
@@ -329,22 +320,6 @@ export const saveMotorHistory = (entry: Omit<MotorHistoryEntry, "id" | "createdA
   })();
 };
 
-export const saveEyeHistory = (entry: Omit<EyeHistoryEntry, "id" | "createdAt">, userId?: string | null) => {
-  const nextEntry = {
-    ...entry,
-    id: buildEntryId(),
-    createdAt: new Date().toISOString(),
-  };
-
-  pushHistoryEntry(withUserKey(STORAGE_KEYS.eye, userId), nextEntry);
-  void (async () => {
-    const pushedViaApi = await pushApiHistoryEntry("eye", nextEntry, userId);
-    if (!pushedViaApi) {
-      await pushSupabaseHistoryEntry("eye", nextEntry, userId);
-    }
-  })();
-};
-
 export const getHearingHistory = (userId?: string | null) =>
   readHistory<HearingHistoryEntry>(withUserKey(STORAGE_KEYS.hearing, userId));
 
@@ -354,9 +329,6 @@ export const getRespiratoryHistory = (userId?: string | null) =>
 export const getMotorHistory = (userId?: string | null) =>
   readHistory<MotorHistoryEntry>(withUserKey(STORAGE_KEYS.motor, userId));
 
-export const getEyeHistory = (userId?: string | null) =>
-  readHistory<EyeHistoryEntry>(withUserKey(STORAGE_KEYS.eye, userId));
-
 export const loadHearingHistory = (userId?: string | null) =>
   loadSupabaseHistory<HearingHistoryEntry>("hearing", userId);
 
@@ -365,6 +337,3 @@ export const loadRespiratoryHistory = (userId?: string | null) =>
 
 export const loadMotorHistory = (userId?: string | null) =>
   loadSupabaseHistory<MotorHistoryEntry>("motor", userId);
-
-export const loadEyeHistory = (userId?: string | null) =>
-  loadSupabaseHistory<EyeHistoryEntry>("eye", userId);

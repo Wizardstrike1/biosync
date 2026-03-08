@@ -3,6 +3,7 @@ import { useAuth } from "@clerk/react";
 
 const ProtectedRoute = () => {
   const { isLoaded, isSignedIn } = useAuth();
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">

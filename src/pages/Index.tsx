@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Wind, Eye, Move3D, Activity, Ear, LineChart } from "lucide-react";
+import { Wind, Eye, Gamepad2, Move3D, Activity, Ear, LineChart } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, useClerk, useUser } from "@clerk/react";
 import TestCard from "@/components/TestCard";
@@ -169,19 +169,27 @@ const Index = () => {
           route="/test/respiratory"
         />
         <TestCard
-          title="Eye Tracker"
-          description="Gaze-based target tracking · Blink and reaction timing"
+          title="Cognitive & Pupil Response"
+          description="High-brightness flash · Pupil constriction speed via facial tracking"
           icon={<Eye className="w-5 h-5 text-accent" />}
           status="ready"
           route="/test/pupil"
           accentClass="glow-accent"
         />
         <TestCard
+          title="Reaction & Blink Test"
+          description="Symbol recognition · Tap or blink response timing"
+          icon={<Gamepad2 className="w-5 h-5 text-primary" />}
+          status="ready"
+          route="/test/reaction"
+        />
+        <TestCard
           title="Motor Control"
           description="Gyroscope steadiness · Crosshair tracking for micro-tremor detection"
-          icon={<Move3D className="w-5 h-5 text-primary" />}
+          icon={<Move3D className="w-5 h-5 text-accent" />}
           status="ready"
           route="/test/motor"
+          accentClass="glow-accent"
         />
       </div>
 

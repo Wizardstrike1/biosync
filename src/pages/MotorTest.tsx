@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Crosshair, Move3D } from "lucide-react";
 import { useAuth } from "@clerk/react";
 import MobileLayout from "@/components/MobileLayout";
@@ -39,28 +39,6 @@ const getTremorLabel = (tremorIndex: number): "Low" | "Moderate" | "High" => {
   if (tremorIndex < 35) return "Low";
   if (tremorIndex < 65) return "Moderate";
   return "High";
-};
-
-// Provide human-readable feedback when tremor index is elevated.
-// The thresholds reflect areas where clinical follow-up might be warranted.
-const getTremorFeedback = (tremorIndex: number): string | null => {
-  if (tremorIndex >= 80) {
-    return (
-      "A tremor index this high may indicate serious neurological conditions such as advanced Parkinson's disease, multiple sclerosis, cerebellar disorders, or side effects from medications like antidepressants, lithium, or stimulants. " +
-      "Potential risks include progressive motor impairment, difficulty with daily activities, and increased fall risk. " +
-      "Look out for: worsening symptoms over time, asymmetric tremors, rigidity, slowed movements, balance problems, or changes in speech/writing. " +
-      "Please consult a neurologist for comprehensive evaluation including possible brain imaging or lab tests."
-    );
-  }
-  if (tremorIndex >= 40) {
-    return (
-      "Elevated tremor levels can be associated with essential tremor, early-stage Parkinson's disease, medication side effects, hyperthyroidism, anxiety, caffeine/alcohol withdrawal, or fatigue. " +
-      "While often benign, monitoring is recommended. " +
-      "Things to look out for: family history of tremors, whether shaking occurs at rest or during movement, improvement with alcohol, worsening with stress/tiredness, or interference with writing/eating. " +
-      "Consider discussing with your healthcare provider if symptoms persist or worsen."
-    );
-  }
-  return null;
 };
 
 const MotorTest = () => {
@@ -328,11 +306,6 @@ const MotorTest = () => {
     return "Touch";
   }, [usesGyro]);
 
-  // compute feedback text once results are available
-  const tremorFeedback = useMemo(() => {
-    return getTremorFeedback(results.tremorIndex);
-  }, [results.tremorIndex]);
-
   return (
     <MobileLayout title="Motor Control" showBack>
       <div className="flex flex-col items-center text-center space-y-6 pt-4">
@@ -448,12 +421,6 @@ const MotorTest = () => {
                 </div>
               ))}
             </div>
-
-            {/* show additional guidance when tremor index is elevated */}
-            {tremorFeedback && (
-              <p className="text-sm text-warning mt-3 leading-relaxed">{tremorFeedback}</p>
-            )}
-
             <Button className="w-full" onClick={resetToIdle}>
               Retake Test
             </Button>

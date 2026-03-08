@@ -22,9 +22,6 @@ const Welcome = () => {
     <div className="min-h-screen bg-background px-6 py-12">
       <div className="mx-auto flex min-h-[calc(100vh-6rem)] w-full max-w-6xl flex-col justify-center gap-10 lg:flex-row lg:items-center lg:justify-between">
         <section className="max-w-2xl space-y-6">
-          <p className="inline-flex items-center rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-[10px] font-mono uppercase tracking-[0.2em] text-primary">
-            MERGED BUILD: biosync-health-hub-main
-          </p>
           <p className="inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-4 py-1.5 text-xs font-mono uppercase tracking-[0.24em] text-muted-foreground">
             <Activity className="h-3.5 w-3.5 text-primary" />
             Biometric Calibration Platform
