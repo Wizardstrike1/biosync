@@ -40,6 +40,14 @@ const formatSessionLabel = (isoString: string, index: number) => {
   return `${day} #${index + 1}`;
 };
 
+const respiratoryHealthPercent = (rms: number, healthPercent?: number) => {
+  if (typeof healthPercent === "number") {
+    return Math.max(0, Math.min(100, Math.round(healthPercent)));
+  }
+
+  return Math.max(0, Math.min(100, Math.round(100 - rms * 85)));
+};
+
 const ResultsHistory = () => {
   const { userId } = useAuth();
   const [section, setSection] = useState<Section>("hearing");
@@ -92,7 +100,7 @@ const ResultsHistory = () => {
         .reverse()
         .map((entry, index) => ({
           name: formatSessionLabel(entry.createdAt, index),
-          value: Number(entry.rms.toFixed(2)),
+          value: respiratoryHealthPercent(entry.rms, entry.healthPercent),
         })),
     [respiratoryHistory],
   );
@@ -151,18 +159,18 @@ const ResultsHistory = () => {
 
   const renderRespiratorySection = () => {
     if (!respiratoryHistory.length) {
-      return renderEmptyState("No respiratory results yet. Complete a respiratory test to populate RMS history.");
+      return renderEmptyState("No respiratory results yet. Complete a respiratory test to populate lung health history.");
     }
 
     return (
       <div className="space-y-3">
         <div className="glass rounded-lg p-3">
-          <p className="text-xs font-mono text-muted-foreground">RESPIRATORY: RMS TREND</p>
+          <p className="text-xs font-mono text-muted-foreground">RESPIRATORY: LUNG HEALTH %</p>
           <ChartContainer config={chartConfig} className="h-56 w-full pt-3">
             <LineChart data={respiratoryChartData} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
               <CartesianGrid vertical={false} />
               <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={8} minTickGap={18} />
-              <YAxis tickLine={false} axisLine={false} width={44} />
+              <YAxis tickLine={false} axisLine={false} width={32} domain={[0, 100]} />
               <ChartTooltip content={<ChartTooltipContent />} />
               <Line type="monotone" dataKey="value" stroke="var(--color-value)" strokeWidth={2.5} dot={{ r: 3 }} />
             </LineChart>
@@ -176,7 +184,9 @@ const ResultsHistory = () => {
                 <p className="text-xs font-mono text-muted-foreground uppercase">{entry.label}</p>
                 <p className="text-[11px] text-muted-foreground">{new Date(entry.createdAt).toLocaleString()}</p>
               </div>
-              <p className="text-sm text-foreground mt-1">RMS {entry.rms.toFixed(2)}</p>
+              <p className="text-sm text-foreground mt-1">
+                Lung Health {respiratoryHealthPercent(entry.rms, entry.healthPercent)}% · RMS {entry.rms.toFixed(2)}
+              </p>
             </div>
           ))}
         </div>

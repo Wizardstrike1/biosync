@@ -40,6 +40,14 @@ type ChartConfig = {
 const formatShortDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
+const respiratoryHealthPercent = (entry: RespiratoryHistoryEntry) => {
+  if (typeof entry.healthPercent === "number") {
+    return Math.max(0, Math.min(100, Math.round(entry.healthPercent)));
+  }
+
+  return Math.max(0, Math.min(100, Math.round(100 - entry.rms * 85)));
+};
+
 const Results = () => {
   const { userId } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
@@ -88,18 +96,7 @@ const Results = () => {
     () =>
       [...respiratoryHistory]
         .reverse()
-        .map((entry) => {
-          const normalized = Math.max(0, Math.min(100, Math.round(100 - entry.rms * 85)));
-          return { label: formatShortDate(entry.createdAt), value: normalized };
-        }),
-    [respiratoryHistory],
-  );
-
-  const exhalationData = useMemo<ChartRow[]>(
-    () =>
-      [...respiratoryHistory]
-        .reverse()
-        .map((entry) => ({ label: formatShortDate(entry.createdAt), value: Number(entry.durationSeconds.toFixed(2)) })),
+        .map((entry) => ({ label: formatShortDate(entry.createdAt), value: respiratoryHealthPercent(entry) })),
     [respiratoryHistory],
   );
 
@@ -153,16 +150,8 @@ const Results = () => {
         formatValue: (value) => `${value.toFixed(3)}s`,
         yDomain: ["auto", "auto"],
       },
-      {
-        key: "exhalation-duration",
-        label: "Exhalation Duration",
-        color: "hsl(var(--primary))",
-        data: exhalationData,
-        formatValue: (value) => `${value.toFixed(2)}s`,
-        yDomain: ["auto", "auto"],
-      },
     ],
-    [exhalationData, eyeAverageTimeData, hearingData, motorData, respiratoryScoreData],
+    [eyeAverageTimeData, hearingData, motorData, respiratoryScoreData],
   );
 
   return (

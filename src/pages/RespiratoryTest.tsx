@@ -8,6 +8,7 @@ import { saveRespiratoryHistory } from "@/lib/testHistory";
 interface LungAnalysisResponse {
   label: "normal" | "crackle" | "wheeze" | "both";
   confidence: number;
+  healthPercent?: number;
   durationSeconds: number;
   features: {
     rms: number;
@@ -16,6 +17,8 @@ interface LungAnalysisResponse {
   source: string;
   note: string;
 }
+
+const ALLOW_ON_DEVICE_FALLBACK = false;
 
 const computeRms = (samples: Float32Array) => {
   if (samples.length === 0) return 0;
@@ -94,6 +97,8 @@ const mergeFloat32Chunks = (chunks: Float32Array[]) => {
 
 const SPECTRUM_BAR_COUNT = 32;
 const IDLE_BAR_HEIGHT = 8;
+const CAPTURE_DURATION_SECONDS = 25;
+const CAPTURE_DURATION_MS = CAPTURE_DURATION_SECONDS * 1000;
 
 const aggregateSpectrumBars = (data: Uint8Array, barCount: number) => {
   const bars = new Array<number>(barCount).fill(IDLE_BAR_HEIGHT);
@@ -202,6 +207,7 @@ const RespiratoryTest = () => {
   const [phase, setPhase] = useState<"idle" | "recording" | "analyzing" | "done">("idle");
   const [analysis, setAnalysis] = useState<LungAnalysisResponse | null>(null);
   const [error, setError] = useState("");
+  const [secondsLeft, setSecondsLeft] = useState(0);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -209,6 +215,8 @@ const RespiratoryTest = () => {
   const analyserNodeRef = useRef<AnalyserNode | null>(null);
   const spectrumDataRef = useRef<Uint8Array | null>(null);
   const spectrumRafIdRef = useRef<number | null>(null);
+  const captureTimeoutRef = useRef<number | null>(null);
+  const captureIntervalRef = useRef<number | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
   const pcmChunksRef = useRef<Float32Array[]>([]);
@@ -221,6 +229,18 @@ const RespiratoryTest = () => {
       window.cancelAnimationFrame(spectrumRafIdRef.current);
       spectrumRafIdRef.current = null;
     }
+  };
+
+  const clearCaptureTimers = () => {
+    if (captureTimeoutRef.current !== null) {
+      window.clearTimeout(captureTimeoutRef.current);
+      captureTimeoutRef.current = null;
+    }
+    if (captureIntervalRef.current !== null) {
+      window.clearInterval(captureIntervalRef.current);
+      captureIntervalRef.current = null;
+    }
+    setSecondsLeft(0);
   };
 
   const resetSpectrum = () => {
@@ -331,6 +351,7 @@ const RespiratoryTest = () => {
       const finishCapture = async () => {
         try {
           setPhase("analyzing");
+          clearCaptureTimers();
 
           const mergedSamples = mergeFloat32Chunks(pcmChunksRef.current);
           if (mergedSamples.length === 0) {
@@ -345,34 +366,69 @@ const RespiratoryTest = () => {
           const wavBlob = encodeWavFromPcm(mergedSamples, audioContext.sampleRate);
           const audioBase64 = await blobToBase64(wavBlob);
 
-          try {
-            let result: LungAnalysisResponse;
+          let result: LungAnalysisResponse;
 
+          try {
             const response = await fetch("/api/lung/analyze", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ audioBase64 }),
             });
 
-            const body = (await response.json()) as LungAnalysisResponse & { message?: string; error?: string };
+            const responseText = await response.text();
+            let body: (Partial<LungAnalysisResponse> & { message?: string; error?: string }) | null = null;
 
-            if (!response.ok) {
-              throw new Error(body.error || body.message || "Analysis failed.");
+            try {
+              body = responseText
+                ? (JSON.parse(responseText) as Partial<LungAnalysisResponse> & { message?: string; error?: string })
+                : null;
+            } catch {
+              throw new Error("Respiratory API returned an invalid response payload.");
             }
 
-            result = body;
-          } catch {
-            const fallback = classifyOnDevice(mergedSamples, audioContext.sampleRate);
-            result = fallback;
+            if (!response.ok) {
+              throw new Error(body?.error || body?.message || "Analysis failed.");
+            }
+
+            const supportedSources = new Set(["lung-cnn-pth", "node-wav-fallback"]);
+            if (!body || !supportedSources.has(String(body.source)) || typeof body.healthPercent !== "number") {
+              throw new Error("Model response missing or invalid.");
+            }
+
+            result = body as LungAnalysisResponse;
+          } catch (analysisFetchError) {
+            if (!ALLOW_ON_DEVICE_FALLBACK) {
+              const networkFailure =
+                analysisFetchError instanceof TypeError ||
+                (analysisFetchError instanceof Error &&
+                  /failed to fetch|networkerror/i.test(analysisFetchError.message));
+
+              if (networkFailure) {
+                throw new Error(
+                  "Unable to reach the respiratory analysis server. Start the local API with 'npm run dev:api' and retry.",
+                );
+              }
+
+              throw analysisFetchError;
+            }
+
+            result = classifyOnDevice(mergedSamples, audioContext.sampleRate);
           }
 
           setAnalysis(result);
-          saveRespiratoryHistory({
-            rms: result.features.rms,
-            confidencePercent: Math.round(result.confidence * 100),
-            durationSeconds: result.durationSeconds,
-            label: result.label,
-          }, userId);
+
+          if (userId) {
+            saveRespiratoryHistory({
+              rms: result.features.rms,
+              confidencePercent: Math.round(result.confidence * 100),
+              healthPercent:
+                typeof result.healthPercent === "number"
+                  ? Math.round(result.healthPercent)
+                  : undefined,
+              durationSeconds: result.durationSeconds,
+              label: result.label,
+            }, userId);
+          }
 
           setPhase("done");
         } catch (analysisError) {
@@ -385,14 +441,21 @@ const RespiratoryTest = () => {
       };
 
       setPhase("recording");
-      window.setTimeout(() => {
+      setSecondsLeft(CAPTURE_DURATION_SECONDS);
+
+      captureIntervalRef.current = window.setInterval(() => {
+        setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+
+      captureTimeoutRef.current = window.setTimeout(() => {
         void finishCapture();
-      }, 3000);
+      }, CAPTURE_DURATION_MS);
     } catch {
       setError("Unable to start recording on this device. Please allow microphone access and retry.");
       await cleanupAudioNodes();
       stopTracks();
       setPhase("idle");
+      clearCaptureTimers();
     }
   };
 
@@ -401,12 +464,14 @@ const RespiratoryTest = () => {
     setAnalysis(null);
     setError("");
     resetSpectrum();
+    clearCaptureTimers();
     void cleanupAudioNodes();
     stopTracks();
   };
 
   useEffect(
     () => () => {
+      clearCaptureTimers();
       stopSpectrumLoop();
       stopTracks();
       void cleanupAudioNodes();
@@ -428,18 +493,27 @@ const RespiratoryTest = () => {
         <div className="space-y-1">
           <h2 className="text-lg font-semibold text-foreground">Forced Exhalation Test</h2>
           <p className="text-xs text-muted-foreground max-w-[260px]">
-            {phase === "idle" && "Exhale forcefully into your phone's microphone for 3 seconds."}
-            {phase === "recording" && "Recording... keep exhaling steadily."}
+            {phase === "idle" && "Place the bottom of your phone on your chest, then breathe deeply for 25 seconds."}
+            {phase === "recording" && `Recording... keep the phone on your chest and breathe deeply (${secondsLeft}s left).`}
             {phase === "analyzing" && "Analyzing respiratory signal..."}
             {phase === "done" && "Analysis complete. Prediction and metrics below."}
           </p>
+        </div>
+
+        <div className="w-full rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-left">
+          <p className="text-xs text-foreground font-medium">Before you start:</p>
+          <ul className="mt-1 list-disc pl-4 text-[11px] text-muted-foreground space-y-0.5">
+            <li>Place the bottom edge of your phone firmly on your chest.</li>
+            <li>Breathe deeply and steadily for the full 25 seconds.</li>
+            <li>Reduce background noise as much as possible (quiet room, no fan/TV).</li>
+          </ul>
         </div>
 
         {/* FFT Bars */}
         <div className="w-full glass rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
             <BarChart3 className="w-3.5 h-3.5 text-primary" />
-            <span className="text-xs font-mono text-muted-foreground">FFT SPECTRUM</span>
+            <span className="text-xs font-mono text-muted-foreground">COMPARES WITH DATA FROM OTHER PATIENTS</span>
           </div>
           <div className="flex items-end gap-0.5 h-24">
             {spectrumBars.map((height, i) => (
@@ -450,18 +524,20 @@ const RespiratoryTest = () => {
               />
             ))}
           </div>
-          <div className="flex justify-between mt-2">
-            <span className="text-[10px] font-mono text-muted-foreground">0 Hz</span>
-            <span className="text-[10px] font-mono text-muted-foreground">8000 Hz</span>
-          </div>
         </div>
 
         {/* Metrics */}
         {phase === "done" && analysis && (
           <div className="grid grid-cols-2 gap-3 w-full">
             {[
+              {
+                label: "Lung Health",
+                value:
+                  typeof analysis.healthPercent === "number"
+                    ? `${Math.round(analysis.healthPercent)}%`
+                    : "N/A",
+              },
               { label: "Prediction", value: analysis.label.toUpperCase() },
-              { label: "Confidence", value: `${Math.round(analysis.confidence * 100)}%` },
               { label: "Duration", value: `${analysis.durationSeconds}s` },
               { label: "Signal RMS", value: `${analysis.features.rms}` },
             ].map((m) => (
@@ -475,6 +551,10 @@ const RespiratoryTest = () => {
 
         {analysis?.note && (
           <p className="w-full text-left text-[10px] text-muted-foreground">{analysis.note}</p>
+        )}
+
+        {analysis?.source && (
+          <p className="w-full text-left text-[10px] text-muted-foreground">Source: {analysis.source}</p>
         )}
 
         {error && (

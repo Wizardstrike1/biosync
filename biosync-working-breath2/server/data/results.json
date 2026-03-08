@@ -1,0 +1,26 @@
+{
+  "hearing": {},
+  "respiratory": {
+    "user_3AdbFj66SZp1hZxmirPlTYxKAlL": [
+      {
+        "rms": 255.91,
+        "confidencePercent": 57,
+        "healthPercent": 49,
+        "durationSeconds": 24.98,
+        "label": "COPD",
+        "id": "1772956529021-qtqgsf",
+        "createdAt": "2026-03-08T07:55:29.021Z"
+      },
+      {
+        "rms": 647.3,
+        "confidencePercent": 82,
+        "healthPercent": 74,
+        "durationSeconds": 24.98,
+        "label": "Healthy",
+        "id": "1772952339978-yamup8",
+        "createdAt": "2026-03-08T06:45:39.978Z"
+      }
+    ]
+  },
+  "motor": {}
+}

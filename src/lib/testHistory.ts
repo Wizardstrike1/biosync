@@ -18,6 +18,7 @@ export type RespiratoryHistoryEntry = {
   createdAt: string;
   rms: number;
   confidencePercent: number;
+  healthPercent?: number;
   durationSeconds: number;
   label: "normal" | "crackle" | "wheeze" | "both";
 };
