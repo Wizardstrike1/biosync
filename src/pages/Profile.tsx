@@ -3,6 +3,7 @@ import { User, LogOut } from "lucide-react";
 import { useAuth, useClerk, useUser } from "@clerk/react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  loadEyeHistory,
   loadHearingHistory,
   loadMotorHistory,
   loadRespiratoryHistory,
@@ -13,17 +14,18 @@ const Profile = () => {
   const { user } = useUser();
   const { userId } = useAuth();
   const { signOut } = useClerk();
-  const [counts, setCounts] = useState({ hearing: 0, respiratory: 0, motor: 0 });
+  const [counts, setCounts] = useState({ hearing: 0, respiratory: 0, motor: 0, eye: 0 });
   const [overallScore, setOverallScore] = useState(0);
 
   useEffect(() => {
     let active = true;
 
     const loadStats = async () => {
-      const [hearing, respiratory, motor] = await Promise.all([
+      const [hearing, respiratory, motor, eye] = await Promise.all([
         loadHearingHistory(userId),
         loadRespiratoryHistory(userId),
         loadMotorHistory(userId),
+        loadEyeHistory(userId),
       ]);
 
       if (!active) return;
@@ -32,6 +34,7 @@ const Profile = () => {
         hearing: hearing.length,
         respiratory: respiratory.length,
         motor: motor.length,
+        eye: eye.length,
       });
       setOverallScore(computeHealthScore(hearing, respiratory, motor).overall);
     };
@@ -44,8 +47,8 @@ const Profile = () => {
   }, [userId]);
 
   const totalTests = useMemo(
-    () => counts.hearing + counts.respiratory + counts.motor,
-    [counts.hearing, counts.motor, counts.respiratory],
+    () => counts.hearing + counts.respiratory + counts.motor + counts.eye,
+    [counts.eye, counts.hearing, counts.motor, counts.respiratory],
   );
 
   return (
@@ -94,6 +97,10 @@ const Profile = () => {
           <div className="rounded-xl bg-secondary/50 p-4 text-sm text-foreground flex justify-between">
             <span>Motor Sessions</span>
             <span className="font-semibold">{counts.motor}</span>
+          </div>
+          <div className="rounded-xl bg-secondary/50 p-4 text-sm text-foreground flex justify-between">
+            <span>Eye Checker Sessions</span>
+            <span className="font-semibold">{counts.eye}</span>
           </div>
         </div>
 
