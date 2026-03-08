@@ -124,7 +124,7 @@ const Results = () => {
       {
         key: "hearing",
         label: "Hearing",
-        color: "hsl(var(--hearing))",
+        color: "hsl(var(--success))",
         data: hearingData,
         formatValue: (value) => `${Math.round(value)}%`,
         yDomain: [0, 100],
@@ -132,7 +132,7 @@ const Results = () => {
       {
         key: "respiratory",
         label: "Respiratory",
-        color: "hsl(var(--respiratory))",
+        color: "hsl(var(--warning))",
         data: respiratoryScoreData,
         formatValue: (value) => `${Math.round(value)}%`,
         yDomain: [0, 100],
@@ -140,7 +140,7 @@ const Results = () => {
       {
         key: "motor",
         label: "Motor",
-        color: "hsl(var(--motor))",
+        color: "hsl(var(--accent))",
         data: motorData,
         formatValue: (value) => `${Math.round(value)}%`,
         yDomain: [0, 100],
