@@ -1,0 +1,32 @@
+import { createRoot } from "react-dom/client";
+import { ClerkProvider } from "@clerk/react";
+import App from "./App.tsx";
+import "./index.css";
+
+const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+const root = createRoot(document.getElementById("root")!);
+
+if (!clerkPublishableKey) {
+	root.render(
+		<div className="min-h-screen bg-background text-foreground px-6 py-10">
+			<div className="mx-auto max-w-2xl rounded-xl border border-border bg-card p-6">
+				<h1 className="text-xl font-semibold">Missing Clerk config</h1>
+				<p className="mt-2 text-sm text-muted-foreground">
+					Add <code>VITE_CLERK_PUBLISHABLE_KEY</code> to
+					<code> biosync-health-hub-main/.env</code> and restart the dev server.
+				</p>
+				<p className="mt-3 text-xs text-muted-foreground">
+					Optional next env vars: <code>VITE_SUPABASE_URL</code>, <code>VITE_SUPABASE_ANON_KEY</code>, and
+					<code> VITE_EYE_TRACKER_WS_URL</code>.
+				</p>
+			</div>
+		</div>,
+	);
+} else {
+	root.render(
+		<ClerkProvider publishableKey={clerkPublishableKey}>
+			<App />
+		</ClerkProvider>,
+	);
+}

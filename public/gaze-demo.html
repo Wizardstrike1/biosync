@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gaze Tracker Demo</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+      background: #f0f0f0;
+      font-family: sans-serif;
+    }
+
+    #gazePoint {
+      width: 20px;
+      height: 20px;
+      background: red;
+      border-radius: 50%;
+      position: absolute;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      display: none;
+      z-index: 10;
+    }
+
+    #hud {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 20;
+      background: rgba(0, 0, 0, 0.75);
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.4;
+      min-width: 260px;
+    }
+
+    #startBtn {
+      margin-top: 8px;
+      border: 0;
+      background: #2563eb;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    #startBtn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div><strong>Status:</strong> <span id="status">Idle</span></div>
+    <div><strong>Last gaze:</strong> <span id="coords">-</span></div>
+    <button id="startBtn" type="button">Start Eye Tracking</button>
+  </div>
+
+  <div id="gazePoint"></div>
+
+  <script src="https://api.gazerecorder.com/GazeCloudAPI.js"></script>
+  <script>
+    (function () {
+      const gazePoint = document.getElementById('gazePoint');
+      const statusEl = document.getElementById('status');
+      const coordsEl = document.getElementById('coords');
+      const startBtn = document.getElementById('startBtn');
+
+      function setStatus(text) {
+        statusEl.textContent = text;
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function updateGaze(gazeData) {
+        if (!gazeData || typeof gazeData.docX !== 'number' || typeof gazeData.docY !== 'number') {
+          return;
+        }
+
+        const x = clamp(gazeData.docX, 0, window.innerWidth);
+        const y = clamp(gazeData.docY, 0, window.innerHeight);
+
+        gazePoint.style.display = 'block';
+        gazePoint.style.left = x + 'px';
+        gazePoint.style.top = y + 'px';
+        coordsEl.textContent = x.toFixed(0) + ', ' + y.toFixed(0);
+      }
+
+      function configureApi() {
+        if (!window.GazeCloudAPI) {
+          setStatus('GazeCloudAPI script did not load.');
+          return false;
+        }
+
+        GazeCloudAPI.OnResult = updateGaze;
+        GazeCloudAPI.OnCalibrationComplete = function () {
+          setStatus('Calibration complete');
+        };
+        GazeCloudAPI.OnCamDenied = function () {
+          setStatus('Camera access denied');
+          alert('Camera access denied');
+        };
+        GazeCloudAPI.OnError = function (msg) {
+          setStatus('Error: ' + msg);
+          console.error('GazeCloudAPI error:', msg);
+        };
+
+        GazeCloudAPI.UseClickRecalibration = true;
+        return true;
+      }
+
+      startBtn.addEventListener('click', function () {
+        if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+          setStatus('Use HTTPS for camera access.');
+          return;
+        }
+
+        if (!configureApi()) {
+          return;
+        }
+
+        setStatus('Starting...');
+        startBtn.disabled = true;
+
+        try {
+          GazeCloudAPI.StartEyeTracking();
+          setStatus('Tracking started');
+        } catch (err) {
+          setStatus('Failed to start tracking');
+          startBtn.disabled = false;
+          console.error(err);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
