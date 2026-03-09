@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { User, LogOut } from "lucide-react";
-import { useAuth, useClerk, useUser } from "@clerk/react";
+import { useAuth, useClerk, useUser } from "@/lib/auth";
 import { useEffect, useMemo, useState } from "react";
 import {
   loadEyeHistory,
@@ -51,6 +51,19 @@ const Profile = () => {
     [counts.eye, counts.hearing, counts.motor, counts.respiratory],
   );
 
+  const avatarUrl =
+    (typeof user?.user_metadata?.avatar_url === "string" && user.user_metadata.avatar_url) ||
+    (typeof user?.user_metadata?.picture === "string" && user.user_metadata.picture) ||
+    null;
+
+  const displayName =
+    (typeof user?.user_metadata?.full_name === "string" && user.user_metadata.full_name) ||
+    (typeof user?.user_metadata?.name === "string" && user.user_metadata.name) ||
+    user?.email?.split("@")[0] ||
+    "BioSync User";
+
+  const email = user?.email ?? "No email available";
+
   return (
     <div className="px-5 pt-14 pb-6">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -58,19 +71,15 @@ const Profile = () => {
 
         <div className="flex items-center gap-4 mb-8">
           <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
-            {user?.imageUrl ? (
-              <img src={user.imageUrl} alt="Profile" className="h-full w-full object-cover" />
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />
             ) : (
               <User className="h-8 w-8 text-primary" />
             )}
           </div>
           <div>
-            <h2 className="font-display font-semibold text-lg text-foreground">
-              {user?.fullName ?? user?.firstName ?? "BioSync User"}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {user?.primaryEmailAddress?.emailAddress ?? "No email available"}
-            </p>
+            <h2 className="font-display font-semibold text-lg text-foreground">{displayName}</h2>
+            <p className="text-sm text-muted-foreground">{email}</p>
           </div>
         </div>
 

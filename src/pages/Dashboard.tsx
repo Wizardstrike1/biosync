@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Ear, Wind, Eye, Hand, Activity } from "lucide-react";
 import TestCard from "@/components/TestCard";
 import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 import {
   HearingHistoryEntry,
   MotorHistoryEntry,

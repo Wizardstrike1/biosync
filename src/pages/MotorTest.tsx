@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Crosshair, Move3D } from "lucide-react";
-import { useAuth } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 import MobileLayout from "@/components/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { saveMotorHistory } from "@/lib/testHistory";

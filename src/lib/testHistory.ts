@@ -231,21 +231,21 @@ const loadSupabaseHistory = async <T extends { id: string; createdAt: string }>(
     return normalizedLocalEntries;
   }
 
-  const apiEntries = await loadApiHistory<T>(type, userId);
-  if (apiEntries) {
-    const remoteIds = new Set(apiEntries.map((entry) => entry.id));
-    const missingLocalEntries = normalizedLocalEntries.filter((entry) => !remoteIds.has(entry.id));
-
-    missingLocalEntries.forEach((entry) => {
-      void pushApiHistoryEntry(type, entry, userId);
-    });
-
-    const merged = mergeHistoryEntries(apiEntries, normalizedLocalEntries);
-    writeHistory(localKey, merged);
-    return merged;
-  }
-
   if (!isSupabaseConfigured || !supabase) {
+    const apiEntries = await loadApiHistory<T>(type, userId);
+    if (apiEntries) {
+      const remoteIds = new Set(apiEntries.map((entry) => entry.id));
+      const missingLocalEntries = normalizedLocalEntries.filter((entry) => !remoteIds.has(entry.id));
+
+      missingLocalEntries.forEach((entry) => {
+        void pushApiHistoryEntry(type, entry, userId);
+      });
+
+      const merged = mergeHistoryEntries(apiEntries, normalizedLocalEntries);
+      writeHistory(localKey, merged);
+      return merged;
+    }
+
     return normalizedLocalEntries;
   }
 
@@ -291,6 +291,11 @@ export const saveHearingHistory = (entry: Omit<HearingHistoryEntry, "id" | "crea
 
   pushHistoryEntry(withUserKey(STORAGE_KEYS.hearing, userId), nextEntry);
   void (async () => {
+    if (isSupabaseConfigured && supabase && userId) {
+      await pushSupabaseHistoryEntry("hearing", nextEntry, userId);
+      return;
+    }
+
     const pushedViaApi = await pushApiHistoryEntry("hearing", nextEntry, userId);
     if (!pushedViaApi) {
       await pushSupabaseHistoryEntry("hearing", nextEntry, userId);
@@ -307,6 +312,11 @@ export const saveRespiratoryHistory = (entry: Omit<RespiratoryHistoryEntry, "id"
 
   pushHistoryEntry(withUserKey(STORAGE_KEYS.respiratory, userId), nextEntry);
   void (async () => {
+    if (isSupabaseConfigured && supabase && userId) {
+      await pushSupabaseHistoryEntry("respiratory", nextEntry, userId);
+      return;
+    }
+
     const pushedViaApi = await pushApiHistoryEntry("respiratory", nextEntry, userId);
     if (!pushedViaApi) {
       await pushSupabaseHistoryEntry("respiratory", nextEntry, userId);
@@ -323,6 +333,11 @@ export const saveMotorHistory = (entry: Omit<MotorHistoryEntry, "id" | "createdA
 
   pushHistoryEntry(withUserKey(STORAGE_KEYS.motor, userId), nextEntry);
   void (async () => {
+    if (isSupabaseConfigured && supabase && userId) {
+      await pushSupabaseHistoryEntry("motor", nextEntry, userId);
+      return;
+    }
+
     const pushedViaApi = await pushApiHistoryEntry("motor", nextEntry, userId);
     if (!pushedViaApi) {
       await pushSupabaseHistoryEntry("motor", nextEntry, userId);
@@ -339,6 +354,11 @@ export const saveEyeHistory = (entry: Omit<EyeHistoryEntry, "id" | "createdAt">,
 
   pushHistoryEntry(withUserKey(STORAGE_KEYS.eye, userId), nextEntry);
   void (async () => {
+    if (isSupabaseConfigured && supabase && userId) {
+      await pushSupabaseHistoryEntry("eye", nextEntry, userId);
+      return;
+    }
+
     const pushedViaApi = await pushApiHistoryEntry("eye", nextEntry, userId);
     if (!pushedViaApi) {
       await pushSupabaseHistoryEntry("eye", nextEntry, userId);

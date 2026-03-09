@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Wind, Eye, Move3D, Activity, Ear, LineChart } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useAuth, useClerk, useUser } from "@clerk/react";
+import { useAuth, useClerk, useUser } from "@/lib/auth";
 import TestCard from "@/components/TestCard";
 import MobileLayout from "@/components/MobileLayout";
 import { Button } from "@/components/ui/button";
@@ -128,6 +128,12 @@ const Index = () => {
   }, [filteredHearingHistory, graphView, motorHistory, respiratoryHistory]);
 
   const yDomain = [0, 100] as const;
+  const displayName =
+    (typeof user?.user_metadata?.full_name === "string" && user.user_metadata.full_name) ||
+    (typeof user?.user_metadata?.name === "string" && user.user_metadata.name) ||
+    user?.email?.split("@")[0] ||
+    "User";
+
   const graphLabel =
     graphView === "hearing"
       ? "Hearing % Heard"
@@ -150,7 +156,7 @@ const Index = () => {
         <div className="glass rounded-lg p-3 flex items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-mono tracking-wider text-muted-foreground uppercase">Active User</p>
-            <p className="text-sm font-medium text-foreground">{user?.firstName ?? user?.username ?? "User"}</p>
+            <p className="text-sm font-medium text-foreground">{displayName}</p>
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => navigate("/")}>Welcome</Button>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { useAuth } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   CartesianGrid,

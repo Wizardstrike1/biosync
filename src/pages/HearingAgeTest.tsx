@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Volume2, Ear } from "lucide-react";
-import { useAuth } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 import MobileLayout from "@/components/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

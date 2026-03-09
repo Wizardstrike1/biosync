@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, BarChart3 } from "lucide-react";
-import { useAuth } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 import MobileLayout from "@/components/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { saveRespiratoryHistory } from "@/lib/testHistory";

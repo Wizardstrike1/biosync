@@ -1,7 +1,10 @@
-import { useMemo } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { Activity } from "lucide-react";
 import { Link, Navigate, useLocation } from "react-router-dom";
-import { SignIn, SignUp, useAuth } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type Mode = "login" | "signup";
 
@@ -13,6 +16,11 @@ const getModeFromSearch = (search: string): Mode => {
 const Auth = () => {
   const location = useLocation();
   const { isLoaded, isSignedIn } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const mode = useMemo(() => getModeFromSearch(location.search), [location.search]);
   const redirectPath = "/dashboard";
@@ -28,6 +36,44 @@ const Auth = () => {
   if (isSignedIn) {
     return <Navigate to={redirectPath} replace />;
   }
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setMessage(null);
+
+    if (!isSupabaseConfigured || !supabase) {
+      setError("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      return;
+    }
+
+    if (!email.trim() || !password.trim()) {
+      setError("Email and password are required.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      if (mode === "login") {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) throw signInError;
+      } else {
+        const { error: signUpError, data } = await supabase.auth.signUp({ email, password });
+        if (signUpError) throw signUpError;
+
+        if (!data.session) {
+          setMessage("Account created. Check your email for the confirmation link, then log in.");
+        }
+      }
+    } catch (err) {
+      const fallback = mode === "login" ? "Unable to log in." : "Unable to create account.";
+      setError(err instanceof Error ? err.message : fallback);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const toggleHref = mode === "login" ? "/auth?mode=signup" : "/auth?mode=login";
   const toggleLabel = mode === "login" ? "Need an account? Sign up" : "Already registered? Log in";
 
@@ -52,21 +98,30 @@ const Auth = () => {
             {mode === "login" ? "Use your BioSync credentials." : "Create your BioSync profile."}
           </p>
 
-          <div className="mt-6">
-            {mode === "login" ? (
-              <SignIn
-                routing="hash"
-                signUpUrl="/#/auth?mode=signup"
-                forceRedirectUrl="/#/dashboard"
-              />
-            ) : (
-              <SignUp
-                routing="hash"
-                signInUrl="/#/auth?mode=login"
-                forceRedirectUrl="/#/dashboard"
-              />
-            )}
-          </div>
+          <form className="mt-6 space-y-3" onSubmit={handleSubmit}>
+            <Input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="email"
+              required
+            />
+            <Input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              minLength={6}
+              required
+            />
+            <Button className="w-full" type="submit" disabled={loading}>
+              {loading ? "Please wait..." : mode === "login" ? "Log in" : "Create account"}
+            </Button>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            {message && <p className="text-xs text-muted-foreground">{message}</p>}
+          </form>
 
           <div className="mt-4 flex items-center justify-between text-xs">
             <Link to={toggleHref} className="text-primary hover:underline">

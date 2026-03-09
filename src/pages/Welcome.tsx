@@ -1,6 +1,6 @@
 import { Activity, ArrowRight, ShieldCheck, Smartphone, Workflow } from "lucide-react";
 import { Link, Navigate } from "react-router-dom";
-import { useAuth } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 
 const Welcome = () => {

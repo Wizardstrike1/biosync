@@ -1,5 +1,5 @@
 import { Navigate, Outlet } from "react-router-dom";
-import { useAuth } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 
 const ProtectedRoute = () => {
   const { isLoaded, isSignedIn } = useAuth();

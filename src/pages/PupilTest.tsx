@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Eye, ScanFace } from "lucide-react";
-import { useAuth } from "@clerk/react";
+import { useAuth } from "@/lib/auth";
 import MobileLayout from "@/components/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { saveEyeHistory } from "@/lib/testHistory";
