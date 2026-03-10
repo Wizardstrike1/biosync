@@ -74,6 +74,24 @@
 }
 
 @layer utilities {
+  @keyframes phone-tilt {
+    0%,
+    100% {
+      transform: rotate(0deg);
+    }
+    25% {
+      transform: rotate(-10deg);
+    }
+    75% {
+      transform: rotate(10deg);
+    }
+  }
+
+  .animate-phone-tilt {
+    animation: phone-tilt 1.8s ease-in-out infinite;
+    transform-origin: center;
+  }
+
   .glow-primary {
     box-shadow: 0 0 20px hsl(174 72% 52% / 0.25), 0 0 60px hsl(174 72% 52% / 0.1);
   }

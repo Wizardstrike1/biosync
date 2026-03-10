@@ -346,6 +346,26 @@ const MotorTest = () => {
                 steer with gyroscope; touch control is available as fallback.
               </p>
             </div>
+
+            <div className="w-full rounded-2xl border border-border/80 bg-gradient-to-b from-primary/20 via-card/80 to-card/95 p-5 min-h-[42vh] flex items-center justify-center relative overflow-hidden">
+              <div className="absolute -top-20 -left-16 h-48 w-48 rounded-full bg-primary/25 blur-3xl" />
+              <div className="absolute -bottom-24 -right-10 h-56 w-56 rounded-full bg-accent/20 blur-3xl" />
+
+              <div className="relative z-10 flex flex-col items-center gap-4 text-center">
+                <div className="relative h-40 w-24 animate-phone-tilt">
+                  <div className="absolute inset-0 rounded-[1.6rem] border-2 border-primary/80 bg-primary/10 shadow-[0_0_50px_hsl(var(--primary)/0.35)]" />
+                  <div className="absolute left-1/2 top-2 -translate-x-1/2 h-1.5 w-8 rounded-full bg-primary/60" />
+                  <div className="absolute left-1/2 top-5 h-[72%] w-[78%] -translate-x-1/2 rounded-[1rem] border border-primary/40 bg-background/50" />
+                  <div className="absolute bottom-2 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-primary/55" />
+                </div>
+
+                <div>
+                  <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Setup Tip</p>
+                  <p className="text-sm text-secondary-foreground mt-1">Flatten and steady your iPhone before pressing Begin Test.</p>
+                </div>
+              </div>
+            </div>
+
             <div className="w-full glass rounded-lg p-4 space-y-2">
               <span className="text-xs font-mono text-muted-foreground">SENSORS USED</span>
               <div className="flex flex-wrap gap-2">
