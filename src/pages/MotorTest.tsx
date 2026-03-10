@@ -76,6 +76,8 @@ const MotorTest = () => {
     tremorIndex: 0,
     tremorLabel: "Low",
   });
+  const [showLevelingOverlay, setShowLevelingOverlay] = useState(false);
+  const [isFlatReady, setIsFlatReady] = useState(false);
 
   const intervalRef = useRef<number | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
@@ -91,6 +93,8 @@ const MotorTest = () => {
     movementDeltas: [],
     previousPoint: null,
   });
+  const flatHoldTimerRef = useRef<number | null>(null);
+  const levelingFailsafeRef = useRef<number | null>(null);
 
   const usesGyro = motionPermission === "granted";
 
@@ -146,7 +150,7 @@ const MotorTest = () => {
   const requestMotionPermission = useCallback(async () => {
     if (typeof window === "undefined" || !("DeviceOrientationEvent" in window)) {
       setMotionPermission("unsupported");
-      return;
+      return "unsupported" as const;
     }
 
     const OrientationEventWithPermission = window.DeviceOrientationEvent as
@@ -157,18 +161,23 @@ const MotorTest = () => {
 
     if (!OrientationEventWithPermission?.requestPermission) {
       setMotionPermission("granted");
-      return;
+      return "granted" as const;
     }
 
     try {
       const permission = await OrientationEventWithPermission.requestPermission();
-      setMotionPermission(permission === "granted" ? "granted" : "denied");
+      const normalized = permission === "granted" ? "granted" : "denied";
+      setMotionPermission(normalized);
+      return normalized;
     } catch {
       setMotionPermission("denied");
+      return "denied" as const;
     }
   }, []);
 
   const startTest = useCallback(() => {
+    setShowLevelingOverlay(false);
+    setIsFlatReady(false);
     setPhase("testing");
     setScore(0);
     setElapsed(0);
@@ -185,6 +194,79 @@ const MotorTest = () => {
     targetPosRef.current = { x: 50, y: 50 };
     crosshairPosRef.current = { x: 50, y: 50 };
   }, []);
+
+  const beginTestFlow = useCallback(async () => {
+    let permission = motionPermission;
+
+    if (permission === "unknown") {
+      permission = await requestMotionPermission();
+    }
+
+    if (permission === "granted") {
+      setIsFlatReady(false);
+      setShowLevelingOverlay(true);
+      return;
+    }
+
+    startTest();
+  }, [motionPermission, requestMotionPermission, startTest]);
+
+  useEffect(() => {
+    if (!showLevelingOverlay || motionPermission !== "granted") return;
+
+    const clearFlatHoldTimer = () => {
+      if (flatHoldTimerRef.current !== null) {
+        window.clearTimeout(flatHoldTimerRef.current);
+        flatHoldTimerRef.current = null;
+      }
+    };
+
+    const clearFailsafe = () => {
+      if (levelingFailsafeRef.current !== null) {
+        window.clearTimeout(levelingFailsafeRef.current);
+        levelingFailsafeRef.current = null;
+      }
+    };
+
+    const completeLeveling = () => {
+      clearFlatHoldTimer();
+      clearFailsafe();
+      setIsFlatReady(true);
+      window.setTimeout(() => {
+        startTest();
+      }, 260);
+    };
+
+    const handleOrientation = (event: DeviceOrientationEvent) => {
+      if (event.beta == null || event.gamma == null) return;
+
+      const isRoughlyFlat = Math.abs(event.beta) <= 12 && Math.abs(event.gamma) <= 12;
+
+      if (!isRoughlyFlat) {
+        setIsFlatReady(false);
+        clearFlatHoldTimer();
+        return;
+      }
+
+      if (flatHoldTimerRef.current === null) {
+        flatHoldTimerRef.current = window.setTimeout(() => {
+          completeLeveling();
+        }, 420);
+      }
+    };
+
+    levelingFailsafeRef.current = window.setTimeout(() => {
+      completeLeveling();
+    }, 8000);
+
+    window.addEventListener("deviceorientation", handleOrientation, true);
+
+    return () => {
+      window.removeEventListener("deviceorientation", handleOrientation, true);
+      clearFlatHoldTimer();
+      clearFailsafe();
+    };
+  }, [motionPermission, showLevelingOverlay, startTest]);
 
   const resetToIdle = useCallback(() => {
     setPhase("idle");
@@ -347,25 +429,6 @@ const MotorTest = () => {
               </p>
             </div>
 
-            <div className="w-full rounded-2xl border border-border/80 bg-gradient-to-b from-primary/20 via-card/80 to-card/95 p-5 min-h-[42vh] flex items-center justify-center relative overflow-hidden">
-              <div className="absolute -top-20 -left-16 h-48 w-48 rounded-full bg-primary/25 blur-3xl" />
-              <div className="absolute -bottom-24 -right-10 h-56 w-56 rounded-full bg-accent/20 blur-3xl" />
-
-              <div className="relative z-10 flex flex-col items-center gap-4 text-center">
-                <div className="relative h-40 w-24 animate-phone-tilt">
-                  <div className="absolute inset-0 rounded-[1.6rem] border-2 border-primary/80 bg-primary/10 shadow-[0_0_50px_hsl(var(--primary)/0.35)]" />
-                  <div className="absolute left-1/2 top-2 -translate-x-1/2 h-1.5 w-8 rounded-full bg-primary/60" />
-                  <div className="absolute left-1/2 top-5 h-[72%] w-[78%] -translate-x-1/2 rounded-[1rem] border border-primary/40 bg-background/50" />
-                  <div className="absolute bottom-2 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-primary/55" />
-                </div>
-
-                <div>
-                  <p className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Setup Tip</p>
-                  <p className="text-sm text-secondary-foreground mt-1">Flatten and steady your iPhone before pressing Begin Test.</p>
-                </div>
-              </div>
-            </div>
-
             <div className="w-full glass rounded-lg p-4 space-y-2">
               <span className="text-xs font-mono text-muted-foreground">SENSORS USED</span>
               <div className="flex flex-wrap gap-2">
@@ -391,7 +454,7 @@ const MotorTest = () => {
               </p>
             )}
 
-            <Button className="w-full" onClick={startTest}>
+            <Button className="w-full" onClick={() => void beginTestFlow()}>
               Begin Test
             </Button>
           </>
@@ -478,6 +541,27 @@ const MotorTest = () => {
           </>
         )}
       </div>
+
+      {showLevelingOverlay && (
+        <div className="fixed inset-0 z-[120] bg-gradient-to-b from-black/95 via-black/90 to-black/95 flex items-center justify-center px-6">
+          <div className="flex flex-col items-center gap-6 text-center">
+            <div className="relative h-48 w-32">
+              <div className={`absolute inset-0 rounded-[2.2rem] border-2 border-white bg-white/5 ${isFlatReady ? "animate-none" : "animate-leveling-phone"}`} />
+              <div className="absolute left-1/2 top-3 -translate-x-1/2 h-1.5 w-10 rounded-full bg-white/90" />
+              <div className="absolute left-1/2 top-7 h-[72%] w-[82%] -translate-x-1/2 rounded-[1.3rem] border border-white/60 bg-transparent" />
+              <div className="absolute bottom-3 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-white/90" />
+              <div className={`absolute -right-10 top-1/2 -translate-y-1/2 text-white ${isFlatReady ? "opacity-100" : "animate-leveling-arrow"}`}>↑</div>
+            </div>
+
+            <div>
+              <p className="text-sm font-mono tracking-wider uppercase text-white/75">Calibrating Tilt</p>
+              <p className="text-base text-white mt-2">
+                {isFlatReady ? "Perfect. Starting test..." : "Tilt your iPhone up to flat and hold for a moment."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </MobileLayout>
   );
 };
