@@ -159,26 +159,6 @@ const classifyFallback = (samples, sampleRate) => {
   };
 };
 
-const randomChoice = (values) => values[Math.floor(Math.random() * values.length)];
-
-const remapHealthPercent = (value) => {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return value;
-  }
-
-  const rounded = Math.round(value);
-
-  if (rounded >= 75) {
-    return randomChoice([85, 90, 95]);
-  }
-
-  if (rounded < 40) {
-    return Math.floor(Math.random() * 20);
-  }
-
-  return rounded;
-};
-
 const sendJson = (res, statusCode, payload) => {
   const body = JSON.stringify(payload);
   res.writeHead(statusCode, {
@@ -331,9 +311,6 @@ const server = createServer(async (req, res) => {
       await fs.writeFile(tempFilePath, Buffer.from(audioBase64, "base64"));
 
       const result = await analyzeWithFallback(audioBase64, tempFilePath);
-      if (result && typeof result === "object") {
-        result.healthPercent = remapHealthPercent(result.healthPercent);
-      }
       sendJson(res, 200, result);
       return;
     } catch (error) {

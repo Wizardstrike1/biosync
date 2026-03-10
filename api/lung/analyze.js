@@ -155,26 +155,6 @@ const parseBody = (body) => {
   throw new Error("Unsupported request body format.");
 };
 
-const randomChoice = (values) => values[Math.floor(Math.random() * values.length)];
-
-const remapHealthPercent = (value) => {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return value;
-  }
-
-  const rounded = Math.round(value);
-
-  if (rounded >= 75) {
-    return randomChoice([85, 90, 95]);
-  }
-
-  if (rounded < 40) {
-    return Math.floor(Math.random() * 20);
-  }
-
-  return rounded;
-};
-
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -199,7 +179,6 @@ export default async function handler(req, res) {
     const wavBuffer = Buffer.from(audioBase64, "base64");
     const { samples, sampleRate } = readWavPcm16Mono(wavBuffer);
     const result = classifyFallback(samples, sampleRate);
-    result.healthPercent = remapHealthPercent(result.healthPercent);
     return res.status(200).json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown respiratory analysis error.";

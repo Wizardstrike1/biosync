@@ -7,6 +7,7 @@ import { saveRespiratoryHistory } from "@/lib/testHistory";
 
 interface LungAnalysisResponse {
   label: "normal" | "crackle" | "wheeze" | "both";
+  diseaseLabel?: "Healthy" | "Asthma" | "COPD" | "Bronchitis" | "Pneumonia" | "URTI";
   confidence: number;
   healthPercent?: number;
   durationSeconds: number;
@@ -14,11 +15,20 @@ interface LungAnalysisResponse {
     rms: number;
     zeroCrossingRate: number;
   };
+  probabilities?: Record<string, number>;
   source: string;
   note: string;
 }
 
 const ALLOW_ON_DEVICE_FALLBACK = false;
+
+const normalizeRespiratoryLabel = (value: unknown): LungAnalysisResponse["label"] => {
+  if (value === "normal" || value === "crackle" || value === "wheeze" || value === "both") {
+    return value;
+  }
+
+  return "normal";
+};
 
 const computeRms = (samples: Float32Array) => {
   if (samples.length === 0) return 0;
@@ -395,7 +405,10 @@ const RespiratoryTest = () => {
               throw new Error("Model response missing or invalid.");
             }
 
-            result = body as LungAnalysisResponse;
+            result = {
+              ...(body as LungAnalysisResponse),
+              label: normalizeRespiratoryLabel((body as { label?: unknown }).label),
+            };
           } catch (analysisFetchError) {
             if (!ALLOW_ON_DEVICE_FALLBACK) {
               const networkFailure =
@@ -426,7 +439,7 @@ const RespiratoryTest = () => {
                   ? Math.round(result.healthPercent)
                   : undefined,
               durationSeconds: result.durationSeconds,
-              label: result.label,
+              label: normalizeRespiratoryLabel(result.label),
             }, userId);
           }
 
@@ -537,7 +550,10 @@ const RespiratoryTest = () => {
                     ? `${Math.round(analysis.healthPercent)}%`
                     : "N/A",
               },
-              { label: "Prediction", value: analysis.label.toUpperCase() },
+              {
+                label: "Prediction",
+                value: (analysis.diseaseLabel ?? analysis.label).toUpperCase(),
+              },
               { label: "Duration", value: `${analysis.durationSeconds}s` },
               { label: "Signal RMS", value: `${analysis.features.rms}` },
             ].map((m) => (
