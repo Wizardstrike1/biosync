@@ -127,6 +127,17 @@ const Dashboard = () => {
     return computeCurrentDailyStreak(allCreatedAt);
   }, [eyeHistory, hearingHistory, memoryHistory, motorHistory, respiratoryHistory]);
 
+  const currentUserCreatedAtValues = useMemo(
+    () => [
+      ...hearingHistory.map((entry) => entry.createdAt),
+      ...respiratoryHistory.map((entry) => entry.createdAt),
+      ...motorHistory.map((entry) => entry.createdAt),
+      ...eyeHistory.map((entry) => entry.createdAt),
+      ...memoryHistory.map((entry) => entry.createdAt),
+    ],
+    [eyeHistory, hearingHistory, memoryHistory, motorHistory, respiratoryHistory],
+  );
+
   const testCount = hearingHistory.length + respiratoryHistory.length + motorHistory.length + eyeHistory.length + memoryHistory.length;
   const avatarUrl = getUserAvatarUrl(user);
 
@@ -167,6 +178,22 @@ const Dashboard = () => {
         currentStreak: computeCurrentDailyStreak(createdAtValues).streak,
         highestStreak: computeHighestDailyStreak(createdAtValues),
       }));
+
+      // Always include the current user using already-loaded local/synced history.
+      if (userId && currentUserCreatedAtValues.length > 0) {
+        const selfEntry: LeaderboardEntry = {
+          userId,
+          currentStreak: computeCurrentDailyStreak(currentUserCreatedAtValues).streak,
+          highestStreak: computeHighestDailyStreak(currentUserCreatedAtValues),
+        };
+
+        const existingIndex = entries.findIndex((entry) => entry.userId === userId);
+        if (existingIndex >= 0) {
+          entries[existingIndex] = selfEntry;
+        } else {
+          entries.push(selfEntry);
+        }
+      }
 
       setLeaderboardEntries(entries);
     } catch {
