@@ -17,11 +17,12 @@ import {
 } from "@/lib/testHistory";
 import { computeHealthScore } from "@/lib/healthScore";
 import { computeCurrentDailyStreak, computeHighestDailyStreak } from "@/lib/streak";
-import { getUserAvatarUrl } from "@/lib/userProfile";
+import { getUserAvatarUrl, getUserDisplayName } from "@/lib/userProfile";
 import { Button } from "@/components/ui/button";
 
 type LeaderboardEntry = {
   userId: string;
+  displayName?: string | null;
   currentStreak: number;
   highestStreak: number;
 };
@@ -139,6 +140,7 @@ const Dashboard = () => {
 
   const testCount = hearingHistory.length + respiratoryHistory.length + motorHistory.length + eyeHistory.length + memoryHistory.length;
   const avatarUrl = getUserAvatarUrl(user);
+  const currentUserDisplayName = getUserDisplayName(user);
 
   const fetchLeaderboard = async () => {
     setIsLeaderboardLoading(true);
@@ -157,6 +159,7 @@ const Dashboard = () => {
       if (userId && currentUserCreatedAtValues.length > 0) {
         const selfEntry: LeaderboardEntry = {
           userId,
+          displayName: currentUserDisplayName,
           currentStreak: computeCurrentDailyStreak(currentUserCreatedAtValues).streak,
           highestStreak: computeHighestDailyStreak(currentUserCreatedAtValues),
         };
@@ -176,6 +179,7 @@ const Dashboard = () => {
         setLeaderboardEntries([
           {
             userId,
+            displayName: currentUserDisplayName,
             currentStreak: computeCurrentDailyStreak(currentUserCreatedAtValues).streak,
             highestStreak: computeHighestDailyStreak(currentUserCreatedAtValues),
           },
@@ -340,7 +344,12 @@ const Dashboard = () => {
                 <div key={entry.userId} className="rounded-lg border border-border bg-secondary/30 px-3 py-2 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold text-foreground">
-                      #{index + 1} {entry.userId === userId ? "You" : compactUserId(entry.userId)}
+                      #{index + 1}{" "}
+                      {entry.userId === userId
+                        ? "You"
+                        : (entry.displayName && entry.displayName.trim().length > 0
+                            ? entry.displayName
+                            : compactUserId(entry.userId))}
                     </p>
                     <p className="text-[11px] text-muted-foreground">Current: {entry.currentStreak}d · Best: {entry.highestStreak}d</p>
                   </div>

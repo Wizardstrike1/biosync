@@ -97,6 +97,72 @@ const fetchSupabaseLeaderboardRows = async () => {
   return Array.isArray(rows) ? rows : [];
 };
 
+const deriveDisplayNameFromAuthUser = (user) => {
+  const metadata = user?.user_metadata ?? user?.raw_user_meta_data ?? {};
+
+  if (typeof metadata.full_name === "string" && metadata.full_name.trim().length > 0) {
+    return metadata.full_name.trim();
+  }
+
+  if (typeof metadata.name === "string" && metadata.name.trim().length > 0) {
+    return metadata.name.trim();
+  }
+
+  if (typeof user?.email === "string" && user.email.includes("@")) {
+    const prefix = user.email.split("@")[0]?.trim();
+    if (prefix) return prefix;
+  }
+
+  return null;
+};
+
+const fetchSupabaseUserDisplayNames = async () => {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRole) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY and VITE_SUPABASE_URL are required for global leaderboard.");
+  }
+
+  const perPage = 1000;
+  const maxPages = 10;
+  const users = [];
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const authUrl = `${supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${perPage}`;
+    const response = await fetch(authUrl, {
+      headers: {
+        apikey: serviceRole,
+        Authorization: `Bearer ${serviceRole}`,
+      },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `Supabase auth users request failed with status ${response.status}`);
+    }
+
+    const body = await response.json();
+    const pageUsers = Array.isArray(body?.users) ? body.users : [];
+    users.push(...pageUsers);
+
+    if (pageUsers.length < perPage) {
+      break;
+    }
+  }
+
+  const displayNameByUserId = new Map();
+  users.forEach((user) => {
+    if (typeof user?.id !== "string" || user.id.length === 0) return;
+    const displayName = deriveDisplayNameFromAuthUser(user);
+    if (displayName) {
+      displayNameByUserId.set(user.id, displayName);
+    }
+  });
+
+  return displayNameByUserId;
+};
+
 const readWavPcm16Mono = (buffer) => {
   if (buffer.length < 44) {
     throw new Error("WAV file is too short.");
@@ -376,7 +442,10 @@ const server = createServer(async (req, res) => {
 
   if (req.method === "GET" && req.url === "/api/leaderboard/streaks") {
     try {
-      const rows = await fetchSupabaseLeaderboardRows();
+      const [rows, displayNameByUserId] = await Promise.all([
+        fetchSupabaseLeaderboardRows(),
+        fetchSupabaseUserDisplayNames(),
+      ]);
       const byUser = new Map();
 
       rows.forEach((row) => {
@@ -388,6 +457,7 @@ const server = createServer(async (req, res) => {
 
       const entries = [...byUser.entries()].map(([userId, createdAtValues]) => ({
         userId,
+        displayName: displayNameByUserId.get(userId) ?? null,
         currentStreak: computeCurrentDailyStreak(createdAtValues),
         highestStreak: computeHighestDailyStreak(createdAtValues),
       }));
