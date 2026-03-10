@@ -82,7 +82,7 @@ const MotorTest = () => {
   const targetPosRef = useRef(targetPos);
   const crosshairPosRef = useRef(crosshairPos);
   const wasOnTargetRef = useRef(false);
-  const orientationOriginRef = useRef<{ beta: number; gamma: number } | null>(
+  const previousOrientationRef = useRef<{ beta: number; gamma: number } | null>(
     null,
   );
   const statsRef = useRef<StatsAccumulator>({
@@ -174,7 +174,7 @@ const MotorTest = () => {
     setElapsed(0);
     setCrosshairPos({ x: 50, y: 50 });
     setTargetPos({ x: 50, y: 50 });
-    orientationOriginRef.current = null;
+    previousOrientationRef.current = null;
     wasOnTargetRef.current = false;
     statsRef.current = {
       totalSamples: 0,
@@ -261,19 +261,25 @@ const MotorTest = () => {
     const handleOrientation = (event: DeviceOrientationEvent) => {
       if (event.beta == null || event.gamma == null) return;
 
-      if (!orientationOriginRef.current) {
-        orientationOriginRef.current = {
+      const previous = previousOrientationRef.current;
+      if (!previous) {
+        previousOrientationRef.current = {
           beta: event.beta,
           gamma: event.gamma,
         };
+        return;
       }
 
-      const origin = orientationOriginRef.current;
-      const relativeGamma = event.gamma - origin.gamma;
-      const relativeBeta = event.beta - origin.beta;
+      const deltaGamma = event.gamma - previous.gamma;
+      const deltaBeta = event.beta - previous.beta;
 
-      const x = 50 + relativeGamma * 1.4;
-      const y = 50 + relativeBeta * 1.2;
+      previousOrientationRef.current = {
+        beta: event.beta,
+        gamma: event.gamma,
+      };
+
+      const x = crosshairPosRef.current.x + deltaGamma * 1.4;
+      const y = crosshairPosRef.current.y + deltaBeta * 1.2;
       updateCrosshair(x, y);
     };
 
@@ -402,10 +408,10 @@ const MotorTest = () => {
 
               {/* Target */}
               <div
-                className="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 transition-all duration-1000 ease-in-out"
+                className="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${targetPos.x}%`, top: `${targetPos.y}%` }}
               >
-                <div className="w-full h-full rounded-full border-2 border-accent animate-pulse-glow" />
+                <div className="w-full h-full rounded-full border-2 border-accent" />
                 <div className="absolute inset-2 rounded-full bg-accent/40" />
               </div>
 
