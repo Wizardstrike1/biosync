@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import { User, LogOut } from "lucide-react";
+import { User, LogOut, Camera, Trash2 } from "lucide-react";
 import { useAuth, useClerk, useUser } from "@/lib/auth";
-import { useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   loadEyeHistory,
   loadHearingHistory,
@@ -11,6 +11,25 @@ import {
 } from "@/lib/testHistory";
 import { computeHealthScore } from "@/lib/healthScore";
 import { computeHighestDailyStreak } from "@/lib/streak";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { getUserAvatarUrl, getUserDisplayName } from "@/lib/userProfile";
+
+const AVATAR_STORAGE_BUCKET = "avatars";
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+
+const fileToDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error("Could not read image file."));
+    };
+    reader.onerror = () => reject(new Error("Could not read image file."));
+    reader.readAsDataURL(file);
+  });
 
 const Profile = () => {
   const { user } = useUser();
@@ -19,6 +38,10 @@ const Profile = () => {
   const [counts, setCounts] = useState({ hearing: 0, respiratory: 0, motor: 0, eye: 0, memory: 0 });
   const [overallScore, setOverallScore] = useState(0);
   const [highestStreak, setHighestStreak] = useState(0);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isAvatarSaving, setIsAvatarSaving] = useState(false);
+  const [avatarNotice, setAvatarNotice] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -66,16 +89,103 @@ const Profile = () => {
     [counts.eye, counts.hearing, counts.memory, counts.motor, counts.respiratory],
   );
 
-  const avatarUrl =
-    (typeof user?.user_metadata?.avatar_url === "string" && user.user_metadata.avatar_url) ||
-    (typeof user?.user_metadata?.picture === "string" && user.user_metadata.picture) ||
-    null;
+  const accountAvatarUrl = getUserAvatarUrl(user);
 
-  const displayName =
-    (typeof user?.user_metadata?.full_name === "string" && user.user_metadata.full_name) ||
-    (typeof user?.user_metadata?.name === "string" && user.user_metadata.name) ||
-    user?.email?.split("@")[0] ||
-    "BioSync User";
+  useEffect(() => {
+    setAvatarUrl(accountAvatarUrl);
+  }, [accountAvatarUrl]);
+
+  const saveAvatarUrl = async (nextAvatarUrl: string | null) => {
+    if (!supabase || !isSupabaseConfigured) {
+      throw new Error("Supabase is not configured for account profile updates.");
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        avatar_url: nextAvatarUrl,
+        picture: nextAvatarUrl,
+      },
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    setAvatarUrl(nextAvatarUrl);
+  };
+
+  const uploadToStorage = async (file: File, nextUserId: string) => {
+    if (!supabase) {
+      throw new Error("Supabase client is unavailable.");
+    }
+
+    const fileExt = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const filePath = `${nextUserId}/avatar-${Date.now()}.${fileExt}`;
+    const { error: uploadError } = await supabase.storage
+      .from(AVATAR_STORAGE_BUCKET)
+      .upload(filePath, file, { upsert: true, contentType: file.type || "image/jpeg" });
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data } = supabase.storage.from(AVATAR_STORAGE_BUCKET).getPublicUrl(filePath);
+    if (!data?.publicUrl) {
+      throw new Error("Could not build avatar URL.");
+    }
+
+    return data.publicUrl;
+  };
+
+  const handlePickAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    setAvatarNotice(null);
+
+    if (!file || !userId) return;
+    if (!file.type.startsWith("image/")) {
+      setAvatarNotice("Please choose an image file.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setAvatarNotice("Image is too large. Please keep it under 5MB.");
+      return;
+    }
+
+    setIsAvatarSaving(true);
+    try {
+      let nextAvatarUrl: string;
+
+      try {
+        nextAvatarUrl = await uploadToStorage(file, userId);
+      } catch {
+        // Fallback keeps avatar persistence even when Storage bucket is not configured.
+        nextAvatarUrl = await fileToDataUrl(file);
+      }
+
+      await saveAvatarUrl(nextAvatarUrl);
+      setAvatarNotice("Profile picture updated.");
+    } catch (err) {
+      setAvatarNotice(err instanceof Error ? err.message : "Could not update profile picture.");
+    } finally {
+      setIsAvatarSaving(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setAvatarNotice(null);
+    setIsAvatarSaving(true);
+    try {
+      await saveAvatarUrl(null);
+      setAvatarNotice("Profile picture removed.");
+    } catch (err) {
+      setAvatarNotice(err instanceof Error ? err.message : "Could not remove profile picture.");
+    } finally {
+      setIsAvatarSaving(false);
+    }
+  };
+
+  const displayName = getUserDisplayName(user);
 
   const email = user?.email ?? "No email available";
 
@@ -96,6 +206,37 @@ const Profile = () => {
             <h2 className="font-display font-semibold text-lg text-foreground">{displayName}</h2>
             <p className="text-sm text-muted-foreground">{email}</p>
           </div>
+        </div>
+
+        <div className="mb-6 space-y-2">
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePickAvatar}
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={isAvatarSaving || !userId}
+              className="flex-1 rounded-xl border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground inline-flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              <Camera className="h-4 w-4" />
+              {isAvatarSaving ? "Saving..." : "Edit Profile Picture"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleRemoveAvatar()}
+              disabled={isAvatarSaving || !avatarUrl || !userId}
+              className="rounded-xl border border-border bg-secondary/40 px-3 py-2 text-sm text-foreground inline-flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              <Trash2 className="h-4 w-4" />
+              Remove
+            </button>
+          </div>
+          {avatarNotice && <p className="text-xs text-muted-foreground">{avatarNotice}</p>}
         </div>
 
         <div className="grid grid-cols-2 gap-3 mb-8">

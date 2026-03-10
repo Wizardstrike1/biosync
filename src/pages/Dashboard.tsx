@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { Ear, Wind, Eye, Hand, Activity, Flame, Brain } from "lucide-react";
 import TestCard from "@/components/TestCard";
 import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "@/lib/auth";
+import { useAuth, useUser } from "@/lib/auth";
 import {
   EyeHistoryEntry,
   HearingHistoryEntry,
@@ -17,6 +17,7 @@ import {
 } from "@/lib/testHistory";
 import { computeHealthScore } from "@/lib/healthScore";
 import { computeCurrentDailyStreak } from "@/lib/streak";
+import { getUserAvatarUrl } from "@/lib/userProfile";
 
 const tests = [
   {
@@ -53,6 +54,7 @@ const tests = [
 
 const Dashboard = () => {
   const { userId } = useAuth();
+  const { user } = useUser();
   const [hearingHistory, setHearingHistory] = useState<HearingHistoryEntry[]>([]);
   const [respiratoryHistory, setRespiratoryHistory] = useState<RespiratoryHistoryEntry[]>([]);
   const [motorHistory, setMotorHistory] = useState<MotorHistoryEntry[]>([]);
@@ -104,6 +106,7 @@ const Dashboard = () => {
   }, [eyeHistory, hearingHistory, memoryHistory, motorHistory, respiratoryHistory]);
 
   const testCount = hearingHistory.length + respiratoryHistory.length + motorHistory.length + eyeHistory.length + memoryHistory.length;
+  const avatarUrl = getUserAvatarUrl(user);
 
   return (
     <div className="px-5 pt-14 pb-6">
@@ -116,8 +119,12 @@ const Dashboard = () => {
           <p className="text-sm text-muted-foreground">Welcome back</p>
           <h1 className="text-2xl font-display font-bold text-foreground">BioSync</h1>
         </div>
-        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-          <Activity className="h-5 w-5 text-primary animate-pulse-glow" />
+        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="User avatar" className="h-full w-full object-cover" />
+          ) : (
+            <Activity className="h-5 w-5 text-primary animate-pulse-glow" />
+          )}
         </div>
       </motion.div>
 
