@@ -109,6 +109,9 @@ const SPECTRUM_BAR_COUNT = 32;
 const IDLE_BAR_HEIGHT = 8;
 const CAPTURE_DURATION_SECONDS = 25;
 const CAPTURE_DURATION_MS = CAPTURE_DURATION_SECONDS * 1000;
+const CALIBRATION_DURATION_SECONDS = 2;
+const CALIBRATION_DURATION_MS = CALIBRATION_DURATION_SECONDS * 1000;
+const MAX_AMBIENT_RMS = 0.055;
 
 const aggregateSpectrumBars = (data: Uint8Array, barCount: number) => {
   const bars = new Array<number>(barCount).fill(IDLE_BAR_HEIGHT);
@@ -214,7 +217,7 @@ const getUserMediaCompat = (constraints: MediaStreamConstraints) => {
 
 const RespiratoryTest = () => {
   const { userId } = useAuth();
-  const [phase, setPhase] = useState<"idle" | "recording" | "analyzing" | "done">("idle");
+  const [phase, setPhase] = useState<"idle" | "calibrating" | "recording" | "analyzing" | "done">("idle");
   const [analysis, setAnalysis] = useState<LungAnalysisResponse | null>(null);
   const [error, setError] = useState("");
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -453,16 +456,51 @@ const RespiratoryTest = () => {
         }
       };
 
-      setPhase("recording");
-      setSecondsLeft(CAPTURE_DURATION_SECONDS);
+      const beginExhalationCapture = () => {
+        pcmChunksRef.current = [];
+        setPhase("recording");
+        setSecondsLeft(CAPTURE_DURATION_SECONDS);
+
+        captureIntervalRef.current = window.setInterval(() => {
+          setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+
+        captureTimeoutRef.current = window.setTimeout(() => {
+          void finishCapture();
+        }, CAPTURE_DURATION_MS);
+      };
+
+      setPhase("calibrating");
+      setSecondsLeft(CALIBRATION_DURATION_SECONDS);
 
       captureIntervalRef.current = window.setInterval(() => {
         setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
       }, 1000);
 
       captureTimeoutRef.current = window.setTimeout(() => {
-        void finishCapture();
-      }, CAPTURE_DURATION_MS);
+        const baselineSamples = mergeFloat32Chunks(pcmChunksRef.current);
+        clearCaptureTimers();
+
+        if (baselineSamples.length === 0) {
+          setError("Calibration failed. No microphone signal detected.");
+          void cleanupAudioNodes();
+          stopTracks();
+          setPhase("idle");
+          return;
+        }
+
+        const ambientRms = computeRms(baselineSamples);
+        if (ambientRms > MAX_AMBIENT_RMS) {
+          setError("Environment is too loud for reliable results. Please move to a quieter place and retry.");
+          void cleanupAudioNodes();
+          stopTracks();
+          setPhase("idle");
+          return;
+        }
+
+        setError("");
+        beginExhalationCapture();
+      }, CALIBRATION_DURATION_MS);
     } catch {
       setError("Unable to start recording on this device. Please allow microphone access and retry.");
       await cleanupAudioNodes();
@@ -496,9 +534,9 @@ const RespiratoryTest = () => {
     <MobileLayout title="Respiratory Health" showBack>
       <div className="flex flex-col items-center text-center space-y-6 pt-8">
         {/* Mic visualization */}
-        <div className={`relative w-28 h-28 rounded-full bg-secondary flex items-center justify-center ${phase === "recording" ? "glow-primary" : ""}`}>
-          <Mic className={`w-10 h-10 ${phase === "recording" ? "text-primary animate-pulse-glow" : "text-muted-foreground"}`} />
-          {phase === "recording" && (
+        <div className={`relative w-28 h-28 rounded-full bg-secondary flex items-center justify-center ${phase === "recording" || phase === "calibrating" ? "glow-primary" : ""}`}>
+          <Mic className={`w-10 h-10 ${phase === "recording" || phase === "calibrating" ? "text-primary animate-pulse-glow" : "text-muted-foreground"}`} />
+          {(phase === "recording" || phase === "calibrating") && (
             <div className="absolute inset-0 rounded-full border-2 border-primary/30 animate-ping" />
           )}
         </div>
@@ -507,6 +545,7 @@ const RespiratoryTest = () => {
           <h2 className="text-lg font-semibold text-foreground">Forced Exhalation Test</h2>
           <p className="text-xs text-muted-foreground max-w-[260px]">
             {phase === "idle" && "Place the bottom of your phone on your chest, then breathe deeply for 25 seconds."}
+            {phase === "calibrating" && `Calibrating room noise... stay quiet (${secondsLeft}s left).`}
             {phase === "recording" && `Recording... keep the phone on your chest and breathe deeply (${secondsLeft}s left).`}
             {phase === "analyzing" && "Analyzing respiratory signal..."}
             {phase === "done" && "Analysis complete. Prediction and metrics below."}
@@ -532,7 +571,7 @@ const RespiratoryTest = () => {
             {spectrumBars.map((height, i) => (
               <div
                 key={i}
-                className={`flex-1 rounded-t-sm transition-all duration-300 ${phase === "done" ? "bg-primary" : phase === "recording" ? "bg-primary/50" : "bg-secondary"}`}
+                className={`flex-1 rounded-t-sm transition-all duration-300 ${phase === "done" ? "bg-primary" : phase === "recording" || phase === "calibrating" ? "bg-primary/50" : "bg-secondary"}`}
                 style={{ height: `${height}%` }}
               />
             ))}
@@ -582,7 +621,7 @@ const RespiratoryTest = () => {
         {/* Action */}
         <Button
           className="w-full"
-          disabled={phase === "recording" || phase === "analyzing"}
+          disabled={phase === "calibrating" || phase === "recording" || phase === "analyzing"}
           onClick={() => {
             if (phase === "idle") {
               void startRecording();
@@ -593,6 +632,8 @@ const RespiratoryTest = () => {
         >
           {phase === "idle"
             ? "Begin Test"
+            : phase === "calibrating"
+              ? "Calibrating..."
             : phase === "recording"
               ? "Recording..."
               : phase === "analyzing"
