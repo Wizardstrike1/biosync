@@ -13,6 +13,14 @@ SAMPLE_RATE = 16000
 N_MELS = 128
 TARGET_LEN = 200
 DISEASE_CLASSES = ["Healthy", "Asthma", "COPD", "Bronchitis", "Pneumonia", "URTI"]
+DISEASE_TO_RESPIRATORY_LABEL = {
+    "Healthy": "normal",
+    "Asthma": "wheeze",
+    "COPD": "both",
+    "Bronchitis": "crackle",
+    "Pneumonia": "crackle",
+    "URTI": "wheeze",
+}
 MODEL_PATH = Path(__file__).resolve().parent / "lung_model.pth"
 
 
@@ -109,15 +117,16 @@ def build_result(file_path: Path):
 
     with torch.no_grad():
         logits = model(tensor)
-        probs = torch.sigmoid(logits)[0].cpu().numpy()
+        probs = torch.softmax(logits, dim=1)[0].cpu().numpy()
 
     predicted_index = int(np.argmax(probs))
-    predicted_label = DISEASE_CLASSES[predicted_index]
+    predicted_disease_label = DISEASE_CLASSES[predicted_index]
+    predicted_respiratory_label = DISEASE_TO_RESPIRATORY_LABEL.get(predicted_disease_label, "normal")
     top_probability = float(probs[predicted_index])
 
     p_healthy = float(probs[0])
-    p_disease_max = float(np.max(probs[1:])) if len(probs) > 1 else 0.0
-    denominator = p_healthy + p_disease_max
+    p_disease_sum = float(np.sum(probs[1:])) if len(probs) > 1 else 0.0
+    denominator = p_healthy + p_disease_sum
     lung_health_percent = 100.0 if denominator <= 1e-8 else 100.0 * p_healthy / denominator
 
     rms = compute_rms(samples) * 32768.0
@@ -129,7 +138,8 @@ def build_result(file_path: Path):
     }
 
     return {
-        "label": predicted_label,
+        "label": predicted_respiratory_label,
+        "diseaseLabel": predicted_disease_label,
         "confidence": round(top_probability, 3),
         "healthPercent": round(float(lung_health_percent), 2),
         "durationSeconds": round(duration, 2),

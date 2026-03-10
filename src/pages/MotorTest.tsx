@@ -76,6 +76,8 @@ const MotorTest = () => {
     tremorIndex: 0,
     tremorLabel: "Low",
   });
+  const [showLevelingOverlay, setShowLevelingOverlay] = useState(false);
+  const [isFlatReady, setIsFlatReady] = useState(false);
 
   const intervalRef = useRef<number | null>(null);
   const areaRef = useRef<HTMLDivElement>(null);
@@ -91,6 +93,8 @@ const MotorTest = () => {
     movementDeltas: [],
     previousPoint: null,
   });
+  const flatHoldTimerRef = useRef<number | null>(null);
+  const levelingFailsafeRef = useRef<number | null>(null);
 
   const usesGyro = motionPermission === "granted";
 
@@ -146,7 +150,7 @@ const MotorTest = () => {
   const requestMotionPermission = useCallback(async () => {
     if (typeof window === "undefined" || !("DeviceOrientationEvent" in window)) {
       setMotionPermission("unsupported");
-      return;
+      return "unsupported" as const;
     }
 
     const OrientationEventWithPermission = window.DeviceOrientationEvent as
@@ -157,18 +161,23 @@ const MotorTest = () => {
 
     if (!OrientationEventWithPermission?.requestPermission) {
       setMotionPermission("granted");
-      return;
+      return "granted" as const;
     }
 
     try {
       const permission = await OrientationEventWithPermission.requestPermission();
-      setMotionPermission(permission === "granted" ? "granted" : "denied");
+      const normalized = permission === "granted" ? "granted" : "denied";
+      setMotionPermission(normalized);
+      return normalized;
     } catch {
       setMotionPermission("denied");
+      return "denied" as const;
     }
   }, []);
 
   const startTest = useCallback(() => {
+    setShowLevelingOverlay(false);
+    setIsFlatReady(false);
     setPhase("testing");
     setScore(0);
     setElapsed(0);
@@ -185,6 +194,79 @@ const MotorTest = () => {
     targetPosRef.current = { x: 50, y: 50 };
     crosshairPosRef.current = { x: 50, y: 50 };
   }, []);
+
+  const beginTestFlow = useCallback(async () => {
+    let permission = motionPermission;
+
+    if (permission === "unknown") {
+      permission = await requestMotionPermission();
+    }
+
+    if (permission === "granted") {
+      setIsFlatReady(false);
+      setShowLevelingOverlay(true);
+      return;
+    }
+
+    startTest();
+  }, [motionPermission, requestMotionPermission, startTest]);
+
+  useEffect(() => {
+    if (!showLevelingOverlay || motionPermission !== "granted") return;
+
+    const clearFlatHoldTimer = () => {
+      if (flatHoldTimerRef.current !== null) {
+        window.clearTimeout(flatHoldTimerRef.current);
+        flatHoldTimerRef.current = null;
+      }
+    };
+
+    const clearFailsafe = () => {
+      if (levelingFailsafeRef.current !== null) {
+        window.clearTimeout(levelingFailsafeRef.current);
+        levelingFailsafeRef.current = null;
+      }
+    };
+
+    const completeLeveling = () => {
+      clearFlatHoldTimer();
+      clearFailsafe();
+      setIsFlatReady(true);
+      window.setTimeout(() => {
+        startTest();
+      }, 260);
+    };
+
+    const handleOrientation = (event: DeviceOrientationEvent) => {
+      if (event.beta == null || event.gamma == null) return;
+
+      const isRoughlyFlat = Math.abs(event.beta) <= 12 && Math.abs(event.gamma) <= 12;
+
+      if (!isRoughlyFlat) {
+        setIsFlatReady(false);
+        clearFlatHoldTimer();
+        return;
+      }
+
+      if (flatHoldTimerRef.current === null) {
+        flatHoldTimerRef.current = window.setTimeout(() => {
+          completeLeveling();
+        }, 420);
+      }
+    };
+
+    levelingFailsafeRef.current = window.setTimeout(() => {
+      completeLeveling();
+    }, 8000);
+
+    window.addEventListener("deviceorientation", handleOrientation, true);
+
+    return () => {
+      window.removeEventListener("deviceorientation", handleOrientation, true);
+      clearFlatHoldTimer();
+      clearFailsafe();
+    };
+  }, [motionPermission, showLevelingOverlay, startTest]);
 
   const resetToIdle = useCallback(() => {
     setPhase("idle");
@@ -352,6 +434,7 @@ const MotorTest = () => {
                 steer with gyroscope; touch control is available as fallback.
               </p>
             </div>
+
             <div className="w-full glass rounded-lg p-4 space-y-2">
               <span className="text-xs font-mono text-muted-foreground">SENSORS USED</span>
               <div className="flex flex-wrap gap-2">
@@ -377,7 +460,7 @@ const MotorTest = () => {
               </p>
             )}
 
-            <Button className="w-full" onClick={startTest}>
+            <Button className="w-full" onClick={() => void beginTestFlow()}>
               Begin Test
             </Button>
           </>
@@ -464,6 +547,27 @@ const MotorTest = () => {
           </>
         )}
       </div>
+
+      {showLevelingOverlay && (
+        <div className="fixed inset-0 z-[120] bg-gradient-to-b from-black/95 via-black/90 to-black/95 flex items-center justify-center px-6">
+          <div className="flex flex-col items-center gap-6 text-center">
+            <div className="relative h-48 w-32">
+              <div className={`absolute inset-0 rounded-[2.2rem] border-2 border-white bg-white/5 ${isFlatReady ? "animate-none" : "animate-leveling-phone"}`} />
+              <div className="absolute left-1/2 top-3 -translate-x-1/2 h-1.5 w-10 rounded-full bg-white/90" />
+              <div className="absolute left-1/2 top-7 h-[72%] w-[82%] -translate-x-1/2 rounded-[1.3rem] border border-white/60 bg-transparent" />
+              <div className="absolute bottom-3 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-white/90" />
+              <div className={`absolute -right-10 top-1/2 -translate-y-1/2 text-white ${isFlatReady ? "opacity-100" : "animate-leveling-arrow"}`}>↑</div>
+            </div>
+
+            <div>
+              <p className="text-sm font-mono tracking-wider uppercase text-white/75">Calibrating Tilt</p>
+              <p className="text-base text-white mt-2">
+                {isFlatReady ? "Perfect. Starting test..." : "Tilt your iPhone up to flat and hold for a moment."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </MobileLayout>
   );
 };

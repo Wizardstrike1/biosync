@@ -11,9 +11,91 @@ const workspaceRoot = path.resolve(__dirname, "..");
 
 const PORT = Number(process.env.AUTH_PORT ?? 4000);
 const MAX_BODY_BYTES = 25 * 1024 * 1024;
+const SECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const oldServerDir = path.resolve(workspaceRoot, "biosync-working-breath2/server");
 const pythonScriptPath = path.join(oldServerDir, "lung_inference.py");
+
+const startOfLocalDay = (value) =>
+  new Date(value.getFullYear(), value.getMonth(), value.getDate());
+
+const getUniqueDayTimestamps = (createdAtValues) => {
+  const completedDays = new Set();
+
+  createdAtValues.forEach((createdAt) => {
+    const date = new Date(createdAt);
+    if (!Number.isNaN(date.getTime())) {
+      completedDays.add(startOfLocalDay(date).getTime());
+    }
+  });
+
+  return [...completedDays].sort((a, b) => b - a);
+};
+
+const computeCurrentDailyStreak = (createdAtValues) => {
+  const sortedDays = getUniqueDayTimestamps(createdAtValues);
+  if (sortedDays.length === 0) return 0;
+
+  const today = startOfLocalDay(new Date()).getTime();
+  const latest = sortedDays[0];
+  const daysFromLatestToToday = Math.floor((today - latest) / SECONDS_PER_DAY);
+  if (daysFromLatestToToday > 1) return 0;
+
+  let streak = 1;
+  for (let i = 1; i < sortedDays.length; i += 1) {
+    const gap = Math.floor((sortedDays[i - 1] - sortedDays[i]) / SECONDS_PER_DAY);
+    if (gap !== 1) break;
+    streak += 1;
+  }
+
+  return streak;
+};
+
+const computeHighestDailyStreak = (createdAtValues) => {
+  const sortedDesc = getUniqueDayTimestamps(createdAtValues);
+  if (sortedDesc.length === 0) return 0;
+
+  const sortedAsc = [...sortedDesc].reverse();
+  let maxStreak = 1;
+  let currentStreak = 1;
+
+  for (let i = 1; i < sortedAsc.length; i += 1) {
+    const gap = Math.floor((sortedAsc[i] - sortedAsc[i - 1]) / SECONDS_PER_DAY);
+    if (gap === 1) {
+      currentStreak += 1;
+      if (currentStreak > maxStreak) maxStreak = currentStreak;
+    } else {
+      currentStreak = 1;
+    }
+  }
+
+  return maxStreak;
+};
+
+const fetchSupabaseLeaderboardRows = async () => {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRole) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY and VITE_SUPABASE_URL are required for global leaderboard.");
+  }
+
+  const url = `${supabaseUrl}/rest/v1/biosync_results?select=user_id,created_at&order=created_at.desc&limit=10000`;
+  const response = await fetch(url, {
+    headers: {
+      apikey: serviceRole,
+      Authorization: `Bearer ${serviceRole}`,
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Supabase request failed with status ${response.status}`);
+  }
+
+  const rows = await response.json();
+  return Array.isArray(rows) ? rows : [];
+};
 
 const readWavPcm16Mono = (buffer) => {
   if (buffer.length < 44) {
@@ -159,26 +241,6 @@ const classifyFallback = (samples, sampleRate) => {
   };
 };
 
-const randomChoice = (values) => values[Math.floor(Math.random() * values.length)];
-
-const remapHealthPercent = (value) => {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return value;
-  }
-
-  const rounded = Math.round(value);
-
-  if (rounded >= 75) {
-    return randomChoice([85, 90, 95]);
-  }
-
-  if (rounded < 40) {
-    return Math.floor(Math.random() * 20);
-  }
-
-  return rounded;
-};
-
 const sendJson = (res, statusCode, payload) => {
   const body = JSON.stringify(payload);
   res.writeHead(statusCode, {
@@ -312,6 +374,33 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "GET" && req.url === "/api/leaderboard/streaks") {
+    try {
+      const rows = await fetchSupabaseLeaderboardRows();
+      const byUser = new Map();
+
+      rows.forEach((row) => {
+        if (!row?.user_id || !row?.created_at) return;
+        const existing = byUser.get(row.user_id) ?? [];
+        existing.push(row.created_at);
+        byUser.set(row.user_id, existing);
+      });
+
+      const entries = [...byUser.entries()].map(([userId, createdAtValues]) => ({
+        userId,
+        currentStreak: computeCurrentDailyStreak(createdAtValues),
+        highestStreak: computeHighestDailyStreak(createdAtValues),
+      }));
+
+      sendJson(res, 200, { entries });
+      return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load leaderboard.";
+      sendJson(res, 500, { error: message });
+      return;
+    }
+  }
+
   if (req.method === "POST" && req.url === "/api/lung/analyze") {
     let tempFilePath = "";
 
@@ -331,9 +420,6 @@ const server = createServer(async (req, res) => {
       await fs.writeFile(tempFilePath, Buffer.from(audioBase64, "base64"));
 
       const result = await analyzeWithFallback(audioBase64, tempFilePath);
-      if (result && typeof result === "object") {
-        result.healthPercent = remapHealthPercent(result.healthPercent);
-      }
       sendJson(res, 200, result);
       return;
     } catch (error) {

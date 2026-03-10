@@ -25,6 +25,7 @@ import {
   loadMotorHistory,
   loadRespiratoryHistory,
 } from "@/lib/testHistory";
+import { getUserAvatarUrl, getUserDisplayName } from "@/lib/userProfile";
 
 type GraphView = "hearing" | "respiratory" | "motor";
 type HearingModeFilter = "all" | "speaker" | "headphone";
@@ -128,11 +129,8 @@ const Index = () => {
   }, [filteredHearingHistory, graphView, motorHistory, respiratoryHistory]);
 
   const yDomain = [0, 100] as const;
-  const displayName =
-    (typeof user?.user_metadata?.full_name === "string" && user.user_metadata.full_name) ||
-    (typeof user?.user_metadata?.name === "string" && user.user_metadata.name) ||
-    user?.email?.split("@")[0] ||
-    "User";
+  const displayName = getUserDisplayName(user);
+  const avatarUrl = getUserAvatarUrl(user);
 
   const graphLabel =
     graphView === "hearing"
@@ -154,9 +152,18 @@ const Index = () => {
         </p>
 
         <div className="glass rounded-lg p-3 flex items-center justify-between gap-3">
-          <div>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-primary/10 overflow-hidden flex items-center justify-center shrink-0">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="User avatar" className="h-full w-full object-cover" />
+              ) : (
+                <Activity className="w-4 h-4 text-primary" />
+              )}
+            </div>
+            <div>
             <p className="text-[10px] font-mono tracking-wider text-muted-foreground uppercase">Active User</p>
             <p className="text-sm font-medium text-foreground">{displayName}</p>
+            </div>
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => navigate("/")}>Welcome</Button>

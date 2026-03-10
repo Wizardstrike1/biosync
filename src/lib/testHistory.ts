@@ -40,11 +40,19 @@ export type EyeHistoryEntry = {
   trialCount: number;
 };
 
+export type MemoryHistoryEntry = {
+  id: string;
+  createdAt: string;
+  levelReached: number;
+  squaresRemembered: number;
+};
+
 const STORAGE_KEYS = {
   hearing: "biosync-history-hearing",
   respiratory: "biosync-history-respiratory",
   motor: "biosync-history-motor",
   eye: "biosync-history-eye",
+  memory: "biosync-history-memory",
 } as const;
 
 const MAX_HISTORY = 30;
@@ -63,12 +71,13 @@ const withUserKey = (baseKey: string, userId?: string | null) =>
 
 const withGuestKey = (baseKey: string) => `${baseKey}:guest`;
 
-type ResultType = "hearing" | "respiratory" | "motor" | "eye";
+type ResultType = "hearing" | "respiratory" | "motor" | "eye" | "memory";
 
 const getResultTypeKey = (type: ResultType) => {
   if (type === "hearing") return STORAGE_KEYS.hearing;
   if (type === "respiratory") return STORAGE_KEYS.respiratory;
   if (type === "eye") return STORAGE_KEYS.eye;
+  if (type === "memory") return STORAGE_KEYS.memory;
   return STORAGE_KEYS.motor;
 };
 
@@ -366,6 +375,27 @@ export const saveEyeHistory = (entry: Omit<EyeHistoryEntry, "id" | "createdAt">,
   })();
 };
 
+export const saveMemoryHistory = (entry: Omit<MemoryHistoryEntry, "id" | "createdAt">, userId?: string | null) => {
+  const nextEntry = {
+    ...entry,
+    id: buildEntryId(),
+    createdAt: new Date().toISOString(),
+  };
+
+  pushHistoryEntry(withUserKey(STORAGE_KEYS.memory, userId), nextEntry);
+  void (async () => {
+    if (isSupabaseConfigured && supabase && userId) {
+      await pushSupabaseHistoryEntry("memory", nextEntry, userId);
+      return;
+    }
+
+    const pushedViaApi = await pushApiHistoryEntry("memory", nextEntry, userId);
+    if (!pushedViaApi) {
+      await pushSupabaseHistoryEntry("memory", nextEntry, userId);
+    }
+  })();
+};
+
 export const getHearingHistory = (userId?: string | null) =>
   readHistory<HearingHistoryEntry>(withUserKey(STORAGE_KEYS.hearing, userId));
 
@@ -378,6 +408,9 @@ export const getMotorHistory = (userId?: string | null) =>
 export const getEyeHistory = (userId?: string | null) =>
   readHistory<EyeHistoryEntry>(withUserKey(STORAGE_KEYS.eye, userId));
 
+export const getMemoryHistory = (userId?: string | null) =>
+  readHistory<MemoryHistoryEntry>(withUserKey(STORAGE_KEYS.memory, userId));
+
 export const loadHearingHistory = (userId?: string | null) =>
   loadSupabaseHistory<HearingHistoryEntry>("hearing", userId);
 
@@ -389,3 +422,6 @@ export const loadMotorHistory = (userId?: string | null) =>
 
 export const loadEyeHistory = (userId?: string | null) =>
   loadSupabaseHistory<EyeHistoryEntry>("eye", userId);
+
+export const loadMemoryHistory = (userId?: string | null) =>
+  loadSupabaseHistory<MemoryHistoryEntry>("memory", userId);

@@ -16,6 +16,7 @@ import RespiratoryTest from "./pages/RespiratoryTest";
 import PupilTest from "./pages/PupilTest";
 import ReactionTest from "./pages/ReactionTest";
 import MotorTest from "./pages/MotorTest";
+import MemoryTest from "./pages/MemoryTest";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -48,6 +49,7 @@ const App = () => {
               <Route path="/test/pupil" element={<PupilTest />} />
               <Route path="/test/reaction" element={<ReactionTest />} />
               <Route path="/test/motor" element={<MotorTest />} />
+              <Route path="/test/memory" element={<MemoryTest />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

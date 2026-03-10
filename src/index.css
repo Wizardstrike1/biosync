@@ -74,6 +74,55 @@
 }
 
 @layer utilities {
+  @keyframes phone-tilt {
+    0%,
+    100% {
+      transform: rotate(0deg);
+    }
+    25% {
+      transform: rotate(-10deg);
+    }
+    75% {
+      transform: rotate(10deg);
+    }
+  }
+
+  .animate-phone-tilt {
+    animation: phone-tilt 1.8s ease-in-out infinite;
+    transform-origin: center;
+  }
+
+  @keyframes leveling-phone {
+    0%,
+    100% {
+      transform: rotate(20deg);
+    }
+    50% {
+      transform: rotate(0deg);
+    }
+  }
+
+  @keyframes leveling-arrow {
+    0%,
+    100% {
+      transform: translateY(14px);
+      opacity: 0.35;
+    }
+    50% {
+      transform: translateY(-14px);
+      opacity: 1;
+    }
+  }
+
+  .animate-leveling-phone {
+    animation: leveling-phone 1.4s ease-in-out infinite;
+    transform-origin: center;
+  }
+
+  .animate-leveling-arrow {
+    animation: leveling-arrow 1.2s ease-in-out infinite;
+  }
+
   .glow-primary {
     box-shadow: 0 0 20px hsl(174 72% 52% / 0.25), 0 0 60px hsl(174 72% 52% / 0.1);
   }
